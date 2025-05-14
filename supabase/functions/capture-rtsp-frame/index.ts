@@ -7,6 +7,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Error response helper
+function errorResponse(message: string, details: any, status = 500) {
+  console.error(`Error: ${message}`, details);
+  return new Response(
+    JSON.stringify({ 
+      error: message,
+      details: details
+    }),
+    { 
+      status: status, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    }
+  );
+}
+
+// Success response helper
+function successResponse(data: any) {
+  return new Response(
+    JSON.stringify(data),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -14,82 +37,88 @@ serve(async (req) => {
   }
 
   try {
-    const { rtspUrl } = await req.json();
+    const { rtspUrl, username, password } = await req.json();
 
     if (!rtspUrl) {
-      return new Response(
-        JSON.stringify({ error: "URL is required" }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return errorResponse("URL is required", null, 400);
     }
 
-    console.log(`Processing HTTP image URL: ${rtspUrl}`);
+    console.log(`Processing image URL: ${rtspUrl}`);
+    
+    // Create fetch options with longer timeout
+    const fetchOptions: RequestInit = {
+      method: "GET",
+      headers: {
+        "Accept": "image/jpeg, image/png, */*"
+      },
+      signal: AbortSignal.timeout(15000) // 15 second timeout
+    };
+    
+    // Add basic auth header if username and password provided separately
+    if (username && password) {
+      const authString = btoa(`${username}:${password}`);
+      fetchOptions.headers = {
+        ...fetchOptions.headers,
+        "Authorization": `Basic ${authString}`
+      };
+      console.log("Using explicit Basic Auth authentication");
+    } else {
+      console.log("No explicit credentials provided, assuming they're in the URL if needed");
+    }
 
-    try {
-      // Simple direct fetch approach
-      const response = await fetch(rtspUrl, {
-        method: "GET",
-        headers: {
-          "Accept": "image/jpeg, image/png, */*"
-        }
-      });
+    // Attempt to fetch the image
+    console.log("Fetching URL with options:", { url: rtspUrl, method: fetchOptions.method });
+    const response = await fetch(rtspUrl, fetchOptions);
+
+    // Handle error response
+    if (!response.ok) {
+      const statusText = response.statusText;
+      const status = response.status;
       
-      // Handle error response
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "No error details");
-        console.error(`Error response (${response.status}):`, errorText);
-        
-        return new Response(
-          JSON.stringify({ 
-            error: "Failed to fetch image from URL",
-            details: `Server responded with status ${response.status}`,
-            errorText: errorText.substring(0, 500)
-          }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      let errorBody;
+      try {
+        // Try to get response body for more details
+        errorBody = await response.text();
+      } catch (e) {
+        errorBody = "Could not read response body";
       }
       
-      // Get the image data
-      const imageData = await response.arrayBuffer();
-      const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageData)));
-      
-      // Determine content type from response or default to jpeg
-      const contentType = response.headers.get("content-type") || "image/jpeg";
-      
-      return new Response(
-        JSON.stringify({ 
-          frameData: `data:${contentType};base64,${base64Image}`,
-          message: "Image successfully captured"
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-      
-    } catch (error) {
-      console.error("Error fetching image:", error);
-      
-      return new Response(
-        JSON.stringify({ 
-          error: "Failed to capture image",
-          details: error.message,
-          suggestions: [
-            "Check if the URL is accessible from the internet",
-            "Verify that the camera/NVR is currently online",
-            "Try a different URL format or authentication method"
-          ]
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return errorResponse(
+        `Server responded with status ${status} ${statusText}`,
+        { 
+          status,
+          statusText,
+          responseBody: errorBody.substring(0, 1000) // Limit size of error body
+        }, 
+        502 // Gateway error
       );
     }
     
+    // Handle successful response
+    try {
+      const contentType = response.headers.get("content-type") || "image/jpeg";
+      const imageData = await response.arrayBuffer();
+      
+      if (imageData.byteLength === 0) {
+        return errorResponse("Image data is empty", null, 502);
+      }
+      
+      // Convert to base64
+      const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageData)));
+      
+      return successResponse({ 
+        frameData: `data:${contentType};base64,${base64Image}`,
+        message: "Image successfully captured",
+        size: imageData.byteLength,
+        contentType
+      });
+    } catch (imageError) {
+      return errorResponse("Failed to process image data", imageError.message, 502);
+    }
   } catch (error) {
-    console.error("General error processing request:", error);
-    
-    return new Response(
-      JSON.stringify({ 
-        error: "Failed to process request",
-        details: error.message
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    return errorResponse(
+      "Failed to process request", 
+      error instanceof Error ? error.message : String(error)
     );
   }
 });

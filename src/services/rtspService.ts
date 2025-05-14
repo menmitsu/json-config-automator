@@ -8,13 +8,31 @@ import { toast } from "@/components/ui/use-toast";
  */
 
 // Function to fetch an image from an HTTP URL
-export const fetchRtspFrame = async (imageUrl: string): Promise<string | null> => {
+export const fetchRtspFrame = async (
+  imageUrl: string, 
+  username?: string, 
+  password?: string
+): Promise<string | null> => {
   try {
     console.log(`Requesting image capture for URL: ${imageUrl}`);
     
-    // Call the Supabase Edge Function
+    // Prepare request body
+    const requestBody: {
+      rtspUrl: string;
+      username?: string;
+      password?: string;
+    } = { rtspUrl: imageUrl };
+    
+    // Add explicit credentials if provided
+    if (username && password) {
+      requestBody.username = username;
+      requestBody.password = password;
+    }
+    
+    // Call the Supabase Edge Function with longer timeout
     const { data, error } = await supabase.functions.invoke("capture-rtsp-frame", {
-      body: { rtspUrl: imageUrl }
+      body: requestBody,
+      timeout: 20000 // 20 seconds timeout
     });
     
     if (error) {
@@ -38,22 +56,21 @@ export const fetchRtspFrame = async (imageUrl: string): Promise<string | null> =
         console.error("Error details:", data.details);
       }
       
-      // Log error text if available
-      if (data.errorText) {
-        console.error("Error text from server:", data.errorText);
-      }
-      
       // Show toast with error message
       toast({
         title: "Image Capture Failed",
-        description: data.details || data.error,
+        description: data.error,
         variant: "destructive"
       });
       
       return null;
     }
     
-    console.log("Image response received:", data.message || "Success");
+    console.log("Image response received:", data.message || "Success", {
+      size: data.size, 
+      type: data.contentType
+    });
+    
     return data.frameData;
   } catch (error) {
     console.error("Error capturing image:", error);

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/use-toast";
 import { Loader2, Play, Video, Search, RefreshCw, Image } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
@@ -117,13 +117,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     const { cleanIp, extractedPort } = formatIpAddress(ipAddress);
     const portToUse = extractedPort || port || "80";
     
-    // If login credentials are available, include them in the URL
-    if (loginId && password) {
-      const escapedPassword = escapePassword(password);
-      return `http://${loginId}:${escapedPassword}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
-    } else {
-      return `http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
-    }
+    // Create a clean URL without credentials
+    return `http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
   };
 
   // Search for centers by name
@@ -237,8 +232,12 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     console.log(`Generated image URL: ${imageUrl}`);
     
     try {
-      // Try to capture an image from the HTTP URL
-      const capturedFrame = await fetchRtspFrame(imageUrl);
+      // Pass username and password separately (more secure)
+      const capturedFrame = await fetchRtspFrame(
+        imageUrl,
+        loginId,
+        password
+      );
       
       if (capturedFrame) {
         setFrameUrl(capturedFrame);
@@ -272,7 +271,12 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       setIsCapturingFrame(true);
       try {
         const imageUrl = generateImageUrl(activeChannel);
-        const capturedFrame = await fetchRtspFrame(imageUrl);
+        // Pass username and password separately
+        const capturedFrame = await fetchRtspFrame(
+          imageUrl,
+          loginId,
+          password
+        );
         
         if (capturedFrame) {
           setFrameUrl(capturedFrame);
