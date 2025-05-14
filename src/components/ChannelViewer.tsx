@@ -1,13 +1,14 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Play, Video } from "lucide-react";
+import { Loader2, Play, Video, Search, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { fetchMultipleSheets } from "@/services/csvService";
 
 interface ChannelViewerProps {
   currentConfig: any;
@@ -19,11 +20,48 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeChannel, setActiveChannel] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("standard");
+  const [centerQuery, setCenterQuery] = useState("");
+  const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
+  const [isFetchingCsv, setIsFetchingCsv] = useState(false);
+  const [searchResults, setSearchResults] = useState<Record<string, string>[]>([]);
+  
+  // Google Sheets URLs
+  const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
+  const SECONDARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=1876766802#gid=1876766802";
   
   // Generate channel numbers based on tab
   const channelNumbers = activeTab === "standard" 
     ? Array.from({ length: 20 }, (_, i) => i + 101) // Standard channels: 101-120
     : Array.from({ length: 20 }, (_, i) => i + 2001); // High channels: 2001-2020
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchGoogleSheetData();
+  }, []);
+
+  // Fetch Google Sheets data
+  const fetchGoogleSheetData = async () => {
+    setIsFetchingCsv(true);
+    try {
+      // Fetch data from both sheets
+      const combinedData = await fetchMultipleSheets([PRIMARY_SHEET_URL, SECONDARY_SHEET_URL]);
+      setCsvData(combinedData);
+      
+      toast({
+        title: "Data Loaded",
+        description: `Successfully loaded ${combinedData.length} centers from Google Sheets`,
+      });
+    } catch (error) {
+      console.error("Error fetching Google Sheet data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load data from Google Sheets",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetchingCsv(false);
+    }
+  };
 
   // Format IP address to remove any http:// or trailing paths/ports
   const formatIpAddress = (ip: string): string => {
@@ -43,12 +81,89 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     return `rtsp://${cleanIp}:${port}/Streaming/Channels/${channelNumber}`;
   };
 
+  // Search for centers by name
+  const searchCenters = () => {
+    if (!centerQuery.trim()) {
+      toast({
+        title: "Empty Query",
+        description: "Please enter a center name to search",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!csvData.length) {
+      toast({
+        title: "No Data",
+        description: "Please wait for the data to load before searching",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const query = centerQuery.toLowerCase().trim();
+    
+    // Search for matches in center name
+    const results = csvData.filter(row => {
+      const centerName = String(row["Center Name"] || "").toLowerCase();
+      return centerName.includes(query);
+    });
+
+    setSearchResults(results);
+    
+    if (results.length === 0) {
+      toast({
+        title: "No Results",
+        description: "No centers found with that name",
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Search Results",
+        description: `Found ${results.length} matching centers`,
+      });
+    }
+  };
+
+  // Select a center from search results
+  const selectCenter = (center: Record<string, string>) => {
+    // Get the NVR Login URL
+    const nvrLoginUrl = center["NVR Login URL"];
+    
+    if (!nvrLoginUrl) {
+      toast({
+        title: "Missing Data",
+        description: "This center doesn't have an NVR Login URL",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Extract IP from the NVR Login URL
+    const extractedIp = formatIpAddress(nvrLoginUrl);
+    setIpAddress(extractedIp);
+    
+    // Get RTSP port if available
+    const rtspPort = center["rtsp port"];
+    if (rtspPort) {
+      setPort(rtspPort);
+    }
+    
+    toast({
+      title: "Center Selected",
+      description: `IP Address set to ${extractedIp}`,
+    });
+    
+    // Clear search results
+    setSearchResults([]);
+  };
+
   // Function to view a channel
   const viewChannel = (channelNumber: number) => {
     if (!ipAddress) {
       toast({
         title: "IP Address Required",
-        description: "Please enter an IP address to view channels",
+        description: "Please enter an IP address or search for a center",
         variant: "destructive"
       });
       return;
@@ -71,9 +186,57 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
 
   return (
     <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="centerQuery">Search for a center</Label>
+          <div className="flex space-x-2">
+            <Input 
+              id="centerQuery"
+              value={centerQuery}
+              onChange={(e) => setCenterQuery(e.target.value)}
+              placeholder="Enter center name (e.g., Dwarka)"
+              onKeyDown={(e) => e.key === 'Enter' && searchCenters()}
+            />
+            <Button onClick={searchCenters} disabled={isFetchingCsv} type="button">
+              {isFetchingCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </Button>
+            <Button onClick={fetchGoogleSheetData} variant="outline" type="button">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {searchResults.length > 0 && (
+          <Card className="mt-4">
+            <CardHeader className="py-2">
+              <CardTitle className="text-sm">Search Results</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2">
+              <div className="max-h-40 overflow-auto space-y-1">
+                {searchResults.map((result, index) => (
+                  <Button 
+                    key={index} 
+                    variant="outline" 
+                    className="w-full justify-start text-left h-auto py-2"
+                    onClick={() => selectCenter(result)}
+                  >
+                    <div>
+                      <div className="font-medium">{result["Center Name"]}</div>
+                      <div className="text-xs text-muted-foreground truncate max-w-xs">
+                        {result["NVR Login URL"] || "No URL"}
+                      </div>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="ipAddress">IP Address (from public_ip)</Label>
+          <Label htmlFor="ipAddress">IP Address</Label>
           <Input 
             id="ipAddress" 
             value={ipAddress} 
