@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,6 @@ import { Loader2, Play, Video, Search, RefreshCw, Image } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { fetchMultipleSheets } from "@/services/csvService";
-
-// Declare jQuery to make TypeScript happy
-declare const $: any;
 
 interface ChannelViewerProps {
   currentConfig: any;
@@ -29,10 +26,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [searchResults, setSearchResults] = useState<Record<string, string>[]>([]);
   const [loginId, setLoginId] = useState("admin");
   const [password, setPassword] = useState("");
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
   const [imageError, setImageError] = useState<string | null>(null);
-  
-  const imageRef = useRef<HTMLImageElement>(null);
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -64,20 +59,6 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   // Load data on component mount
   useEffect(() => {
     fetchGoogleSheetData();
-  }, []);
-
-  // Check if jQuery is loaded and initialize the jQuery code
-  useEffect(() => {
-    const jQueryCheckInterval = setInterval(() => {
-      if (window.$ || window.jQuery) {
-        console.log("jQuery is loaded!");
-        clearInterval(jQueryCheckInterval);
-      }
-    }, 100);
-
-    return () => {
-      clearInterval(jQueryCheckInterval);
-    };
   }, []);
 
   // Fetch Google Sheets data
@@ -131,16 +112,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     const { cleanIp, extractedPort } = formatIpAddress(ipAddress);
     const portToUse = extractedPort || port || "80";
     
-    // Create Base URL
+    // Create Base URL without authentication
     let baseUrl = `http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
-    
-    // Add authentication if provided
-    if (loginId && password) {
-      // Add credentials to URL
-      const protocol = baseUrl.startsWith('https') ? 'https' : 'http';
-      const urlWithoutProtocol = baseUrl.replace(/^https?:\/\//i, '');
-      baseUrl = `${protocol}://${encodeURIComponent(loginId)}:${encodeURIComponent(password)}@${urlWithoutProtocol}`;
-    }
     
     return baseUrl;
   };
@@ -203,7 +176,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       return;
     }
     
-    // Extract IP from the NVR Login URL - now using the new function
+    // Extract IP from the NVR Login URL
     const { cleanIp, extractedPort } = formatIpAddress(nvrLoginUrl);
     setIpAddress(nvrLoginUrl); // Set the full URL to preserve port
     
@@ -236,7 +209,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     setSearchResults([]);
   };
 
-  // Function to view a channel using jQuery
+  // Function to view a channel 
   const viewChannel = (channelNumber: number) => {
     if (!ipAddress) {
       toast({
@@ -250,66 +223,45 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     setIsLoading(true);
     setActiveChannel(channelNumber);
     setImageError(null);
-    setIsImageLoaded(false);
-
+    
     // Generate image URL with timestamp to prevent caching
     const baseUrl = generateImageUrl(channelNumber);
-    const initialUrl = `${baseUrl}?t=${new Date().getTime()}`;
+    const url = `${baseUrl}?t=${new Date().getTime()}`;
+    setImageUrl(url);
     
-    // Set up image when jQuery is ready
-    if (window.$ || window.jQuery) {
-      const $ = window.$ || window.jQuery;
-      
-      // Ensure image element exists
-      if (imageRef.current) {
-        // Set initial image
-        $(imageRef.current).attr('src', initialUrl);
-        
-        // Set up load/error handlers
-        $(imageRef.current).off('load error').on({
-          load: function() {
-            setIsImageLoaded(true);
-            setIsLoading(false);
-            setImageError(null);
-            toast({
-              title: "Image Loaded",
-              description: `Successfully loaded image from channel ${channelNumber}`
-            });
-          },
-          error: function() {
-            setIsLoading(false);
-            setIsImageLoaded(false);
-            setImageError(`Failed to load image from channel ${channelNumber}`);
-            toast({
-              title: "Image Load Failed",
-              description: "Could not load image from the camera",
-              variant: "destructive"
-            });
-          }
-        });
-      }
-    } else {
-      toast({
-        title: "jQuery Not Loaded",
-        description: "jQuery is required for this feature but could not be loaded",
-        variant: "destructive"
-      });
-      setIsLoading(false);
-    }
+    toast({
+      title: "Loading Image",
+      description: `Attempting to load image from channel ${channelNumber}`
+    });
   };
 
   // Function to manually refresh the current frame
   const refreshFrame = () => {
-    if (activeChannel && window.$ && imageRef.current) {
+    if (activeChannel) {
       const baseUrl = generateImageUrl(activeChannel);
       const url = `${baseUrl}?t=${new Date().getTime()}`;
-      window.$(imageRef.current).attr('src', url);
+      setImageUrl(url);
       
       toast({
         title: "Manual Refresh",
         description: "Refreshing image..."
       });
     }
+  };
+
+  const handleImageLoad = () => {
+    setIsLoading(false);
+    setImageError(null);
+  };
+
+  const handleImageError = () => {
+    setIsLoading(false);
+    setImageError(`Failed to load image from channel ${activeChannel}`);
+    toast({
+      title: "Image Load Failed",
+      description: "Could not load image from the camera",
+      variant: "destructive"
+    });
   };
 
   return (
@@ -446,12 +398,15 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
               </div>
             ) : activeChannel ? (
               <div className="absolute inset-0">
-                <img 
-                  ref={imageRef}
-                  alt={`Frame from channel ${activeChannel}`}
-                  className="w-full h-full object-cover"
-                  style={{ display: isImageLoaded ? 'block' : 'none' }}
-                />
+                {imageUrl && (
+                  <img 
+                    src={imageUrl}
+                    alt={`Frame from channel ${activeChannel}`}
+                    className="w-full h-full object-cover"
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
+                  />
+                )}
                 
                 {imageError && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
@@ -491,6 +446,23 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
             {activeChannel && (
               <p>Click "Manual Refresh" button to update the image.</p>
             )}
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Debug Information - Direct Image Example */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Direct Image Test</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm">This is a simple direct image tag for testing:</p>
+          <div className="border p-4 rounded-md">
+            <img
+              src="http://116.74.4.62:8098/ISAPI/Streaming/channels/101/picture"
+              alt="Snapshot from camera 101"
+              className="max-w-full h-auto"
+            />
           </div>
         </CardContent>
       </Card>
