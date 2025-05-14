@@ -46,12 +46,15 @@ serve(async (req) => {
     console.log(`Processing image URL: ${rtspUrl}`);
     
     // Create fetch options with longer timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
     const fetchOptions: RequestInit = {
       method: "GET",
       headers: {
         "Accept": "image/jpeg, image/png, */*"
       },
-      signal: AbortSignal.timeout(15000) // 15 second timeout
+      signal: controller.signal
     };
     
     // Add basic auth header if username and password provided separately
@@ -66,54 +69,64 @@ serve(async (req) => {
       console.log("No explicit credentials provided, assuming they're in the URL if needed");
     }
 
-    // Attempt to fetch the image
-    console.log("Fetching URL with options:", { url: rtspUrl, method: fetchOptions.method });
-    const response = await fetch(rtspUrl, fetchOptions);
-
-    // Handle error response
-    if (!response.ok) {
-      const statusText = response.statusText;
-      const status = response.status;
-      
-      let errorBody;
-      try {
-        // Try to get response body for more details
-        errorBody = await response.text();
-      } catch (e) {
-        errorBody = "Could not read response body";
-      }
-      
-      return errorResponse(
-        `Server responded with status ${status} ${statusText}`,
-        { 
-          status,
-          statusText,
-          responseBody: errorBody.substring(0, 1000) // Limit size of error body
-        }, 
-        502 // Gateway error
-      );
-    }
-    
-    // Handle successful response
     try {
-      const contentType = response.headers.get("content-type") || "image/jpeg";
-      const imageData = await response.arrayBuffer();
-      
-      if (imageData.byteLength === 0) {
-        return errorResponse("Image data is empty", null, 502);
+      // Attempt to fetch the image
+      console.log("Fetching URL with options:", { url: rtspUrl, method: fetchOptions.method });
+      const response = await fetch(rtspUrl, fetchOptions);
+      clearTimeout(timeoutId); // Clear timeout if fetch completes
+
+      // Handle error response
+      if (!response.ok) {
+        const statusText = response.statusText;
+        const status = response.status;
+        
+        let errorBody;
+        try {
+          // Try to get response body for more details
+          errorBody = await response.text();
+        } catch (e) {
+          errorBody = "Could not read response body";
+        }
+        
+        return errorResponse(
+          `Server responded with status ${status} ${statusText}`,
+          { 
+            status,
+            statusText,
+            responseBody: errorBody.substring(0, 1000) // Limit size of error body
+          }, 
+          502 // Gateway error
+        );
       }
       
-      // Convert to base64
-      const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageData)));
-      
-      return successResponse({ 
-        frameData: `data:${contentType};base64,${base64Image}`,
-        message: "Image successfully captured",
-        size: imageData.byteLength,
-        contentType
-      });
-    } catch (imageError) {
-      return errorResponse("Failed to process image data", imageError.message, 502);
+      // Handle successful response
+      try {
+        const contentType = response.headers.get("content-type") || "image/jpeg";
+        const imageData = await response.arrayBuffer();
+        
+        if (imageData.byteLength === 0) {
+          return errorResponse("Image data is empty", null, 502);
+        }
+        
+        // Convert to base64
+        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageData)));
+        
+        return successResponse({ 
+          frameData: `data:${contentType};base64,${base64Image}`,
+          message: "Image successfully captured",
+          size: imageData.byteLength,
+          contentType
+        });
+      } catch (imageError) {
+        return errorResponse("Failed to process image data", imageError.message, 502);
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      // Check if the error is due to timeout
+      if (fetchError.name === 'AbortError') {
+        return errorResponse("Request timed out after 15 seconds", null, 504);
+      }
+      return errorResponse("Failed to fetch image", fetchError.message, 502);
     }
   } catch (error) {
     return errorResponse(

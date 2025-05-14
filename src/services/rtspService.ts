@@ -29,10 +29,9 @@ export const fetchRtspFrame = async (
       requestBody.password = password;
     }
     
-    // Call the Supabase Edge Function with longer timeout
+    // Call the Supabase Edge Function - removed timeout as it's not supported
     const { data, error } = await supabase.functions.invoke("capture-rtsp-frame", {
-      body: requestBody,
-      timeout: 20000 // 20 seconds timeout
+      body: requestBody
     });
     
     if (error) {
