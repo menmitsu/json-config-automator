@@ -30,6 +30,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [imageError, setImageError] = useState<string | null>(null);
   const [httpCommand, setHttpCommand] = useState("");
   const [directImageUrl, setDirectImageUrl] = useState("http://admin:fp123456@122.176.135.50:8098/ISAPI/Streaming/channels/102/picture");
+  const [showDirectImage, setShowDirectImage] = useState(true);
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -210,7 +211,9 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     }
     
     // Also update the direct image test URL
-    setDirectImageUrl(`http://${loginID || "admin"}:${pwd || "fp123456"}@${cleanIp}${extractedPort ? `:${extractedPort}` : ":80"}/ISAPI/Streaming/channels/102/picture`);
+    const directUrl = `http://${loginID || "admin"}:${pwd || "fp123456"}@${cleanIp}:${extractedPort || "80"}/ISAPI/Streaming/channels/102/picture`;
+    setDirectImageUrl(directUrl);
+    setShowDirectImage(true); // Reset display state
     
     toast({
       title: "Center Selected",
@@ -236,10 +239,9 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     setActiveChannel(channelNumber);
     setImageError(null);
     
-    // Generate image URL with timestamp to prevent caching
+    // Generate image URL without timestamp to prevent caching issues
     const baseUrl = generateImageUrl(channelNumber);
-    const url = `${baseUrl}?t=${new Date().getTime()}`;
-    setImageUrl(url);
+    setImageUrl(baseUrl);
     
     toast({
       title: "Loading Image",
@@ -250,9 +252,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   // Function to manually refresh the current frame
   const refreshFrame = () => {
     if (activeChannel) {
-      const baseUrl = generateImageUrl(activeChannel);
-      const url = `${baseUrl}?t=${new Date().getTime()}`;
-      setImageUrl(url);
+      // Simply call viewChannel again to refresh
+      viewChannel(activeChannel);
       
       toast({
         title: "Manual Refresh",
@@ -278,12 +279,25 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
 
   // Function to refresh the direct image test URL
   const refreshDirectImageUrl = () => {
-    const timestamp = new Date().getTime();
-    setDirectImageUrl(`${directImageUrl.split('?')[0]}?t=${timestamp}`);
+    // Re-create URL without timestamp
+    const baseUrl = directImageUrl.split('?')[0];
+    setDirectImageUrl(baseUrl);
+    setShowDirectImage(true); // Reset display state
     
     toast({
       title: "Test Image Refreshed",
-      description: "Direct image test URL updated with timestamp"
+      description: "Direct image test URL refreshed"
+    });
+  };
+
+  // Function to handle direct image error
+  const handleDirectImageError = () => {
+    console.error("Direct image test loading failed");
+    setShowDirectImage(false);
+    toast({
+      title: "Test Image Failed",
+      description: "Could not load test image. Check credentials and URL.",
+      variant: "destructive"
     });
   };
 
@@ -506,23 +520,31 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           <p className="mb-4 text-sm">This is a simple direct image tag for testing:</p>
           <div className="border p-4 rounded-md">
             <div className="flex flex-col items-center">
-              <img
-                src={directImageUrl}
-                alt="Snapshot from camera 102"
-                className="max-w-full h-auto"
-                onError={(e) => {
-                  console.error("Direct image test loading failed");
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  toast({
-                    title: "Test Image Failed",
-                    description: "Could not load test image. Check credentials and URL.",
-                    variant: "destructive"
-                  });
-                }}
-                onLoad={() => {
-                  console.log("Direct image test loaded successfully");
-                }}
-              />
+              {showDirectImage ? (
+                <img
+                  src={directImageUrl}
+                  alt="Snapshot from camera 102"
+                  className="max-w-full h-auto"
+                  onError={handleDirectImageError}
+                  onLoad={() => console.log("Direct image test loaded successfully")}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <Image className="h-12 w-12 mb-2 text-gray-400" />
+                  <p>Image failed to load</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setShowDirectImage(true);
+                      refreshDirectImageUrl();
+                    }}
+                    className="mt-3"
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              )}
               <p className="text-center text-sm mt-2">
                 If the image isn't showing, try the "Refresh Test Image" button
               </p>
