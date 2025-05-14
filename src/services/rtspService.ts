@@ -2,7 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Service to handle RTSP stream captures using a third-party RTSP to image service
+ * Service to handle RTSP stream captures using a simulated camera image generation
  * via Supabase Edge Function
  */
 
