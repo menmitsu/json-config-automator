@@ -8,6 +8,7 @@ import { toast } from "@/hooks/use-toast";
 import { Download, FileText } from "lucide-react";
 import CsvDataFetcher from "@/components/CsvDataFetcher";
 import ConfigMappingRules from "@/components/ConfigMappingRules";
+import ChannelViewer from "@/components/ChannelViewer";
 import useConfigMapping from "@/hooks/useConfigMapping";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -103,9 +104,10 @@ const Index = () => {
         </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="query">Ask Questions</TabsTrigger>
             <TabsTrigger value="csv">Import from CSV</TabsTrigger>
+            <TabsTrigger value="channels">Channel Viewer</TabsTrigger>
             <TabsTrigger value="editor">JSON Editor</TabsTrigger>
           </TabsList>
 
@@ -145,6 +147,17 @@ const Index = () => {
                     </Button>
                   </>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="channels" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Channel Viewer</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ChannelViewer currentConfig={configData} />
               </CardContent>
             </Card>
           </TabsContent>
