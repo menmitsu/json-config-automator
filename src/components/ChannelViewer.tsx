@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,9 @@ import { Loader2, Play, Video, Search, RefreshCw, Image } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { fetchMultipleSheets } from "@/services/csvService";
-import { fetchRtspFrame } from "@/services/rtspService";
+
+// Declare jQuery to make TypeScript happy
+declare const $: any;
 
 interface ChannelViewerProps {
   currentConfig: any;
@@ -26,8 +28,11 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [searchResults, setSearchResults] = useState<Record<string, string>[]>([]);
   const [loginId, setLoginId] = useState("admin");
   const [password, setPassword] = useState("");
-  const [frameUrl, setFrameUrl] = useState<string | null>(null);
-  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [refreshTimer, setRefreshTimer] = useState<number | null>(null);
+  
+  const imageRef = useRef<HTMLImageElement>(null);
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -61,6 +66,29 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     fetchGoogleSheetData();
   }, []);
 
+  // Stop timer on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+      }
+    };
+  }, [refreshTimer]);
+
+  // Check if jQuery is loaded and initialize the jQuery code
+  useEffect(() => {
+    const jQueryCheckInterval = setInterval(() => {
+      if (window.$ || window.jQuery) {
+        console.log("jQuery is loaded!");
+        clearInterval(jQueryCheckInterval);
+      }
+    }, 100);
+
+    return () => {
+      clearInterval(jQueryCheckInterval);
+    };
+  }, []);
+
   // Fetch Google Sheets data
   const fetchGoogleSheetData = async () => {
     setIsFetchingCsv(true);
@@ -85,7 +113,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     }
   };
 
-  // Format IP address and port - now separates port from IP
+  // Format IP address and port
   const formatIpAddress = (ip: string): { cleanIp: string, extractedPort: string | null } => {
     // Remove protocol prefix if present
     let formattedIp = ip.replace(/^https?:\/\//i, '');
@@ -107,18 +135,23 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     return { cleanIp: formattedIp, extractedPort };
   };
 
-  // Escape special characters in password for URL
-  const escapePassword = (pass: string): string => {
-    return pass.replace(/#/g, '%23');
-  };
-
   // Generate HTTP image URL for a specific channel
   const generateImageUrl = (channelNumber: number): string => {
     const { cleanIp, extractedPort } = formatIpAddress(ipAddress);
     const portToUse = extractedPort || port || "80";
     
-    // Create a clean URL without credentials
-    return `http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+    // Create Base URL
+    let baseUrl = `http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+    
+    // Add authentication if provided
+    if (loginId && password) {
+      // Add credentials to URL
+      const protocol = baseUrl.startsWith('https') ? 'https' : 'http';
+      const urlWithoutProtocol = baseUrl.replace(/^https?:\/\//i, '');
+      baseUrl = `${protocol}://${encodeURIComponent(loginId)}:${encodeURIComponent(password)}@${urlWithoutProtocol}`;
+    }
+    
+    return baseUrl;
   };
 
   // Search for centers by name
@@ -212,8 +245,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     setSearchResults([]);
   };
 
-  // Function to view a channel and capture a frame
-  const viewChannel = async (channelNumber: number) => {
+  // Function to view a channel using jQuery
+  const viewChannel = (channelNumber: number) => {
     if (!ipAddress) {
       toast({
         title: "IP Address Required",
@@ -223,78 +256,85 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       return;
     }
 
+    // Clear existing refresh timer if any
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      setRefreshTimer(null);
+    }
+
     setIsLoading(true);
     setActiveChannel(channelNumber);
-    setFrameUrl(null); // Clear previous frame
-    setIsCapturingFrame(true);
+    setImageError(null);
+    setIsImageLoaded(false);
 
-    const imageUrl = generateImageUrl(channelNumber);
-    console.log(`Generated image URL: ${imageUrl}`);
+    // Generate initial image URL with timestamp
+    const baseUrl = generateImageUrl(channelNumber);
+    const initialUrl = `${baseUrl}?t=${new Date().getTime()}`;
     
-    try {
-      // Pass username and password separately (more secure)
-      const capturedFrame = await fetchRtspFrame(
-        imageUrl,
-        loginId,
-        password
-      );
+    // Set up periodic refresh when jQuery is ready
+    if (window.$ || window.jQuery) {
+      const $ = window.$ || window.jQuery;
       
-      if (capturedFrame) {
-        setFrameUrl(capturedFrame);
-        toast({
-          title: "Image Captured",
-          description: `Successfully captured image from channel ${channelNumber}`
+      // Ensure image element exists
+      if (imageRef.current) {
+        // Set initial image
+        $(imageRef.current).attr('src', initialUrl);
+        
+        // Set up load/error handlers
+        $(imageRef.current).off('load error').on({
+          load: function() {
+            setIsImageLoaded(true);
+            setIsLoading(false);
+            setImageError(null);
+            toast({
+              title: "Image Loaded",
+              description: `Successfully loaded image from channel ${channelNumber}`
+            });
+          },
+          error: function() {
+            setIsLoading(false);
+            setIsImageLoaded(false);
+            setImageError(`Failed to load image from channel ${channelNumber}`);
+            toast({
+              title: "Image Load Failed",
+              description: "Could not load image from the camera",
+              variant: "destructive"
+            });
+          }
         });
-      } else {
-        toast({
-          title: "Image Capture Failed",
-          description: "Could not capture image from the camera",
-          variant: "destructive"
-        });
+        
+        // Set up refresh timer
+        const timer = window.setInterval(() => {
+          if (imageRef.current) {
+            const url = `${baseUrl}?t=${new Date().getTime()}`;
+            $(imageRef.current).attr('src', url);
+            console.log("Refreshing image...");
+          }
+        }, 5000); // Refresh every 5 seconds
+        
+        setRefreshTimer(timer);
       }
-    } catch (error) {
-      console.error("Error viewing channel:", error);
+    } else {
       toast({
-        title: "Error",
-        description: "Failed to connect to the camera",
+        title: "jQuery Not Loaded",
+        description: "jQuery is required for this feature but could not be loaded",
         variant: "destructive"
       });
-    } finally {
       setIsLoading(false);
-      setIsCapturingFrame(false);
     }
   };
 
-  // Function to refresh the current frame
-  const refreshFrame = async () => {
-    if (activeChannel) {
-      setIsCapturingFrame(true);
-      try {
-        const imageUrl = generateImageUrl(activeChannel);
-        // Pass username and password separately
-        const capturedFrame = await fetchRtspFrame(
-          imageUrl,
-          loginId,
-          password
-        );
-        
-        if (capturedFrame) {
-          setFrameUrl(capturedFrame);
-          toast({
-            title: "Image Refreshed",
-            description: `Successfully refreshed image from channel ${activeChannel}`
-          });
-        }
-      } catch (error) {
-        console.error("Error refreshing image:", error);
-        toast({
-          title: "Error",
-          description: "Failed to refresh the image",
-          variant: "destructive"
-        });
-      } finally {
-        setIsCapturingFrame(false);
-      }
+  // Function to manually refresh the current frame
+  const refreshFrame = () => {
+    if (activeChannel && window.$ && imageRef.current) {
+      const baseUrl = generateImageUrl(activeChannel);
+      const url = `${baseUrl}?t=${new Date().getTime()}`;
+      window.$(imageRef.current).attr('src', url);
+      
+      toast({
+        title: "Manual Refresh",
+        description: "Refreshing image..."
+      });
     }
   };
 
@@ -320,6 +360,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </div>
         </div>
 
+        {/* Search Results */}
         {searchResults.length > 0 && (
           <Card className="mt-4">
             <CardHeader className="py-2">
@@ -418,23 +459,42 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </CardTitle>
           {activeChannel && (
             <div className="text-xs text-muted-foreground">
-              {generateImageUrl(activeChannel)}
+              Auto-refreshing every 5 seconds
             </div>
           )}
         </CardHeader>
         <CardContent>
           <AspectRatio ratio={16/9} className="bg-muted relative overflow-hidden rounded-md">
-            {isLoading || isCapturingFrame ? (
+            {isLoading ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <span className="ml-2">Loading image...</span>
               </div>
-            ) : frameUrl && activeChannel ? (
+            ) : activeChannel ? (
               <div className="absolute inset-0">
                 <img 
-                  src={frameUrl} 
+                  ref={imageRef}
                   alt={`Frame from channel ${activeChannel}`}
                   className="w-full h-full object-cover"
+                  style={{ display: isImageLoaded ? 'block' : 'none' }}
                 />
+                
+                {imageError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+                    <Image className="h-16 w-16 mb-2" />
+                    <p className="text-sm">{imageError}</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => viewChannel(activeChannel)}
+                      className="mt-4"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-1" />
+                      Try Again
+                    </Button>
+                  </div>
+                )}
+
                 <div className="absolute bottom-4 right-4">
                   <Button 
                     size="sm" 
@@ -443,24 +503,9 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
                     className="opacity-80 hover:opacity-100"
                   >
                     <RefreshCw className="h-4 w-4 mr-1" />
-                    Refresh
+                    Manual Refresh
                   </Button>
                 </div>
-              </div>
-            ) : activeChannel ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
-                <Image className="h-16 w-16 mb-2" />
-                <p className="text-sm">Failed to capture frame</p>
-                <p className="text-xs mt-1">Channel {activeChannel}</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => viewChannel(activeChannel)}
-                  className="mt-4"
-                >
-                  <RefreshCw className="h-4 w-4 mr-1" />
-                  Try Again
-                </Button>
               </div>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
@@ -469,8 +514,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
             )}
           </AspectRatio>
           <div className="text-xs mt-2 text-muted-foreground text-center">
-            {frameUrl && activeChannel && (
-              <p>Single frame captured from HTTP URL. Refresh to get the latest frame.</p>
+            {activeChannel && (
+              <p>Image refreshes automatically every 5 seconds. Click "Manual Refresh" for immediate update.</p>
             )}
           </div>
         </CardContent>
