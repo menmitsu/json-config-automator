@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { Loader2, Play, Video, Search, RefreshCw, Image } from "lucide-react";
+import { Loader2, Play, Video, Search, RefreshCw, Image, Terminal } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { fetchMultipleSheets } from "@/services/csvService";
@@ -27,6 +27,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [password, setPassword] = useState("fp123456");
   const [imageUrl, setImageUrl] = useState("");
   const [imageError, setImageError] = useState<string | null>(null);
+  const [httpCommand, setHttpCommand] = useState("");
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -114,6 +115,9 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     // Include authentication directly in the URL
     let baseUrl = `http://${loginId}:${password}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
     
+    // Update HTTP command for display
+    setHttpCommand(`curl -u "${loginId}:${password}" "http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture" -o snapshot.jpg`);
+    
     return baseUrl;
   };
 
@@ -187,21 +191,25 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       }
     }
     
-    // Get login credentials
+    // Get login credentials from the CSV data
     const loginID = center["Login ID"];
     const pwd = center["Password"];
     
     if (loginID) {
       setLoginId(loginID);
+    } else {
+      setLoginId("admin"); // Default fallback
     }
     
     if (pwd) {
       setPassword(pwd);
+    } else {
+      setPassword("fp123456"); // Default fallback
     }
     
     toast({
       title: "Center Selected",
-      description: `IP Address set to ${cleanIp}${extractedPort ? `, Port: ${extractedPort}` : ""}${loginID ? `, Login ID: ${loginID}` : ""}`,
+      description: `IP Address set to ${cleanIp}${extractedPort ? `, Port: ${extractedPort}` : ""}${loginID ? `, Login ID: ${loginID}` : ""}${pwd ? `, Password: ${pwd}` : ""}`,
     });
     
     // Clear search results
@@ -329,18 +337,14 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </p>
         </div>
         <div>
-          <Label htmlFor="port">Port (auto-detected)</Label>
+          <Label htmlFor="loginId">Login ID</Label>
           <Input 
-            id="port" 
-            value={port} 
-            onChange={(e) => setPort(e.target.value)}
-            placeholder="80"
+            id="loginId" 
+            value={loginId} 
+            onChange={(e) => setLoginId(e.target.value)}
+            placeholder="admin"
             className="mt-1"
-            disabled={ipAddress.includes(":")}
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            {ipAddress.includes(":") ? "Port detected from URL" : "Manual port entry"}
-          </p>
         </div>
         <div>
           <Label htmlFor="password">Password</Label>
@@ -448,6 +452,26 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* HTTP Command Display */}
+      {activeChannel && httpCommand && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="flex items-center gap-2 text-md">
+              <Terminal className="h-4 w-4" />
+              HTTP Command
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto">
+              <code className="text-sm whitespace-pre-wrap break-all">{httpCommand}</code>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              This command can be used in terminal/command prompt to download the current frame.
+            </p>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Debug Information - Direct Image Example */}
       <Card>
@@ -463,6 +487,9 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
               className="max-w-full h-auto"
             />
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Complete URL: http://admin:fp123456@122.176.135.50:8098/ISAPI/Streaming/channels/102/picture
+          </p>
         </CardContent>
       </Card>
     </div>
