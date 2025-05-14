@@ -24,6 +24,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [isFetchingCsv, setIsFetchingCsv] = useState(false);
   const [searchResults, setSearchResults] = useState<Record<string, string>[]>([]);
+  const [loginId, setLoginId] = useState("admin");
+  const [password, setPassword] = useState("");
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -75,10 +77,22 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     return formattedIp;
   };
 
+  // Escape special characters in password for RTSP URL
+  const escapePassword = (pass: string): string => {
+    return pass.replace(/#/g, '%23');
+  };
+
   // Generate RTSP URL for a specific channel
   const generateRtspUrl = (channelNumber: number): string => {
     const cleanIp = formatIpAddress(ipAddress);
-    return `rtsp://${cleanIp}:${port}/Streaming/Channels/${channelNumber}`;
+    
+    // If login credentials are available, include them in the URL
+    if (loginId && password) {
+      const escapedPassword = escapePassword(password);
+      return `rtsp://${loginId}:${escapedPassword}@${cleanIp}:${port}/Streaming/Channels/${channelNumber}`;
+    } else {
+      return `rtsp://${cleanIp}:${port}/Streaming/Channels/${channelNumber}`;
+    }
   };
 
   // Search for centers by name
@@ -149,9 +163,21 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       setPort(rtspPort);
     }
     
+    // Get login credentials
+    const loginID = center["Login ID"];
+    const pwd = center["Password"];
+    
+    if (loginID) {
+      setLoginId(loginID);
+    }
+    
+    if (pwd) {
+      setPassword(pwd);
+    }
+    
     toast({
       title: "Center Selected",
-      description: `IP Address set to ${extractedIp}`,
+      description: `IP Address set to ${extractedIp}${loginID ? `, Login ID: ${loginID}` : ""}`,
     });
     
     // Clear search results
@@ -234,7 +260,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label htmlFor="ipAddress">IP Address</Label>
           <Input 
@@ -252,6 +278,17 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
             value={port} 
             onChange={(e) => setPort(e.target.value)}
             placeholder="1024"
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <Label htmlFor="password">Password</Label>
+          <Input 
+            id="password" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            placeholder="Password for RTSP authentication"
             className="mt-1"
           />
         </div>
