@@ -26,28 +26,63 @@ serve(async (req) => {
     console.log(`Processing HTTP image URL: ${rtspUrl}`);
     
     try {
-      // Directly fetch the image from the HTTP URL
-      const response = await fetch(rtspUrl, {
+      // Try multiple authentication methods
+      // First attempt: Use credentials directly in URL as provided
+      let response = await fetch(rtspUrl, {
         method: "GET",
         headers: {
           "Accept": "image/jpeg, image/png, */*"
         }
       });
       
-      // Check if the request was successful
+      // If first attempt fails with 401, try with Authorization header
+      if (response.status === 401) {
+        console.log("First attempt failed with 401, trying Authorization header method");
+        
+        try {
+          // Extract credentials from URL
+          const urlObj = new URL(rtspUrl);
+          if (urlObj.username && urlObj.password) {
+            // Create a clean URL without credentials
+            const cleanUrl = `${urlObj.protocol}//${urlObj.hostname}${urlObj.port ? ':' + urlObj.port : ''}${urlObj.pathname}${urlObj.search}`;
+            
+            // Create Authorization header
+            const credentials = `${urlObj.username}:${urlObj.password}`;
+            const auth = btoa(credentials);
+            
+            console.log(`Trying with Authorization header to: ${cleanUrl}`);
+            
+            // Try with Authorization header
+            response = await fetch(cleanUrl, {
+              method: "GET",
+              headers: {
+                "Accept": "image/jpeg, image/png, */*",
+                "Authorization": `Basic ${auth}`
+              }
+            });
+          }
+        } catch (authError) {
+          console.error("Error while trying auth header approach:", authError);
+        }
+      }
+      
+      // Check if any of the attempts was successful
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await response.text().catch(() => "No error details");
         console.error(`Error response (${response.status}):`, errorText);
+        
+        let suggestions = [
+          "Verify the URL is correct and accessible",
+          "Check if authentication credentials are required",
+          "Ensure the camera/NVR is online and responding",
+          "Try using the credentials in a different format (username:password@host vs. Authorization header)"
+        ];
         
         return new Response(
           JSON.stringify({ 
             error: "Failed to fetch image from URL",
             details: `Server responded with status ${response.status}`,
-            suggestions: [
-              "Verify the URL is correct and accessible",
-              "Check if authentication credentials are required",
-              "Ensure the camera/NVR is online and responding"
-            ]
+            suggestions
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -78,7 +113,8 @@ serve(async (req) => {
           suggestions: [
             "Check if the URL is accessible from the internet",
             "Verify that the camera/NVR is currently online",
-            "Ensure the URL includes proper authentication if required"
+            "Ensure the URL includes proper authentication if required",
+            "Try using credentials in HTTP Authorization header instead of the URL"
           ]
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
