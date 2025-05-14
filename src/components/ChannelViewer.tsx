@@ -16,7 +16,7 @@ interface ChannelViewerProps {
 
 const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [ipAddress, setIpAddress] = useState(currentConfig.public_ip || "");
-  const [port, setPort] = useState("1024");
+  const [port, setPort] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeChannel, setActiveChannel] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("standard");
@@ -37,6 +37,24 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const channelNumbers = activeTab === "standard" 
     ? Array.from({ length: 20 }, (_, i) => i + 101) // Standard channels: 101-120
     : Array.from({ length: 20 }, (_, i) => i + 2001); // High channels: 2001-2020
+
+  // Extract port from URL when ipAddress changes
+  useEffect(() => {
+    if (ipAddress) {
+      // Try to extract port from the URL
+      const urlRegex = /:(\d+)/;
+      const portMatch = ipAddress.match(urlRegex);
+      
+      if (portMatch && portMatch[1]) {
+        console.log(`Extracted port ${portMatch[1]} from URL`);
+        setPort(portMatch[1]);
+      } else {
+        // Default port if not found
+        console.log("No port found in URL, using default");
+        setPort("80");
+      }
+    }
+  }, [ipAddress]);
 
   // Load data on component mount
   useEffect(() => {
@@ -67,16 +85,26 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     }
   };
 
-  // Format IP address to remove any http:// or trailing paths/ports
-  const formatIpAddress = (ip: string): string => {
+  // Format IP address and port - now separates port from IP
+  const formatIpAddress = (ip: string): { cleanIp: string, extractedPort: string | null } => {
     // Remove protocol prefix if present
     let formattedIp = ip.replace(/^https?:\/\//i, '');
     
-    // Remove port and any trailing path
-    formattedIp = formattedIp.split(':')[0];
+    // Check if there's a port in the URL
+    const portRegex = /:(\d+)/;
+    const portMatch = formattedIp.match(portRegex);
+    let extractedPort = null;
+    
+    if (portMatch && portMatch[1]) {
+      extractedPort = portMatch[1];
+      // Remove port from IP for clean formatting
+      formattedIp = formattedIp.split(':')[0];
+    }
+    
+    // Remove any trailing path
     formattedIp = formattedIp.split('/')[0];
     
-    return formattedIp;
+    return { cleanIp: formattedIp, extractedPort };
   };
 
   // Escape special characters in password for URL
@@ -86,14 +114,15 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
 
   // Generate HTTP image URL for a specific channel
   const generateImageUrl = (channelNumber: number): string => {
-    const cleanIp = formatIpAddress(ipAddress);
+    const { cleanIp, extractedPort } = formatIpAddress(ipAddress);
+    const portToUse = extractedPort || port || "80";
     
     // If login credentials are available, include them in the URL
     if (loginId && password) {
       const escapedPassword = escapePassword(password);
-      return `http://${loginId}:${escapedPassword}@${cleanIp}:${port}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+      return `http://${loginId}:${escapedPassword}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
     } else {
-      return `http://${cleanIp}:${port}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+      return `http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
     }
   };
 
@@ -155,14 +184,16 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       return;
     }
     
-    // Extract IP from the NVR Login URL
-    const extractedIp = formatIpAddress(nvrLoginUrl);
-    setIpAddress(extractedIp);
+    // Extract IP from the NVR Login URL - now using the new function
+    const { cleanIp, extractedPort } = formatIpAddress(nvrLoginUrl);
+    setIpAddress(nvrLoginUrl); // Set the full URL to preserve port
     
-    // Get RTSP port if available
-    const rtspPort = center["rtsp port"];
-    if (rtspPort) {
-      setPort(rtspPort);
+    // Only set port if it wasn't found in the URL and is available in CSV
+    if (!extractedPort) {
+      const rtspPort = center["rtsp port"];
+      if (rtspPort) {
+        setPort(rtspPort);
+      }
     }
     
     // Get login credentials
@@ -179,7 +210,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     
     toast({
       title: "Center Selected",
-      description: `IP Address set to ${extractedIp}${loginID ? `, Login ID: ${loginID}` : ""}`,
+      description: `IP Address set to ${cleanIp}${extractedPort ? `, Port: ${extractedPort}` : ""}${loginID ? `, Login ID: ${loginID}` : ""}`,
     });
     
     // Clear search results
@@ -203,6 +234,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     setIsCapturingFrame(true);
 
     const imageUrl = generateImageUrl(channelNumber);
+    console.log(`Generated image URL: ${imageUrl}`);
     
     try {
       // Try to capture an image from the HTTP URL
@@ -314,24 +346,31 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <Label htmlFor="ipAddress">IP Address</Label>
+          <Label htmlFor="ipAddress">NVR URL</Label>
           <Input 
             id="ipAddress" 
             value={ipAddress} 
             onChange={(e) => setIpAddress(e.target.value)}
-            placeholder="Enter IP address"
+            placeholder="Enter IP address with port (e.g., 122.176.135.50:8098)"
             className="mt-1"
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Include the port in the URL (e.g., 122.176.135.50:8098)
+          </p>
         </div>
         <div>
-          <Label htmlFor="port">RTSP Port</Label>
+          <Label htmlFor="port">Port (auto-detected)</Label>
           <Input 
             id="port" 
             value={port} 
             onChange={(e) => setPort(e.target.value)}
-            placeholder="1024"
+            placeholder="80"
             className="mt-1"
+            disabled={ipAddress.includes(":")}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            {ipAddress.includes(":") ? "Port detected from URL" : "Manual port entry"}
+          </p>
         </div>
         <div>
           <Label htmlFor="password">Password</Label>
@@ -340,7 +379,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
             value={password} 
             onChange={(e) => setPassword(e.target.value)}
             type="password"
-            placeholder="Password for RTSP authentication"
+            placeholder="Password for authentication"
             className="mt-1"
           />
         </div>
@@ -427,10 +466,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </AspectRatio>
           <div className="text-xs mt-2 text-muted-foreground text-center">
             {frameUrl && activeChannel && (
-              <p>Single frame captured from RTSP stream. Refresh to get the latest frame.</p>
-            )}
-            {!frameUrl && activeChannel && (
-              <p>Note: This demo simulates frame capture. In production, a server with FFmpeg would be required.</p>
+              <p>Single frame captured from HTTP URL. Refresh to get the latest frame.</p>
             )}
           </div>
         </CardContent>
