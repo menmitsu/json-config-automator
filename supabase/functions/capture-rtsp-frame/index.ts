@@ -1,137 +1,115 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// CORS headers for browser requests
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// Error response helper
-function errorResponse(message: string, details: any, status = 500) {
-  console.error(`Error: ${message}`, details);
-  return new Response(
-    JSON.stringify({ 
-      error: message,
-      details: details
-    }),
-    { 
-      status: status, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    }
-  );
+// Define the request body structure
+interface RequestBody {
+  rtspUrl: string;
+  username?: string;
+  password?: string;
 }
 
-// Success response helper
-function successResponse(data: any) {
-  return new Response(
-    JSON.stringify(data),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
-
+// HTTP handler for the edge function
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
-    const { rtspUrl, username, password } = await req.json();
-
+    // Extract request data
+    const { rtspUrl, username, password } = await req.json() as RequestBody;
+    
+    // Log the incoming request (not logging password for security)
+    console.log(`Processing request for URL: ${rtspUrl}`);
+    
     if (!rtspUrl) {
-      return errorResponse("URL is required", null, 400);
+      return new Response(
+        JSON.stringify({ 
+          error: "Missing required parameter: rtspUrl" 
+        }),
+        { headers: { "Content-Type": "application/json" }, status: 400 }
+      );
     }
-
-    console.log(`Processing image URL: ${rtspUrl}`);
     
-    // Create fetch options with longer timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    // Build the request URL with authentication if provided
+    let targetUrl = rtspUrl;
     
-    const fetchOptions: RequestInit = {
-      method: "GET",
-      headers: {
-        "Accept": "image/jpeg, image/png, */*"
-      },
-      signal: controller.signal
-    };
-    
-    // Add basic auth header if username and password provided separately
-    if (username && password) {
-      const authString = btoa(`${username}:${password}`);
-      fetchOptions.headers = {
-        ...fetchOptions.headers,
-        "Authorization": `Basic ${authString}`
-      };
-      console.log("Using explicit Basic Auth authentication");
-    } else {
-      console.log("No explicit credentials provided, assuming they're in the URL if needed");
-    }
-
-    try {
-      // Attempt to fetch the image
-      console.log("Fetching URL with options:", { url: rtspUrl, method: fetchOptions.method });
-      const response = await fetch(rtspUrl, fetchOptions);
-      clearTimeout(timeoutId); // Clear timeout if fetch completes
-
-      // Handle error response
-      if (!response.ok) {
-        const statusText = response.statusText;
-        const status = response.status;
-        
-        let errorBody;
-        try {
-          // Try to get response body for more details
-          errorBody = await response.text();
-        } catch (e) {
-          errorBody = "Could not read response body";
-        }
-        
-        return errorResponse(
-          `Server responded with status ${status} ${statusText}`,
-          { 
-            status,
-            statusText,
-            responseBody: errorBody.substring(0, 1000) // Limit size of error body
-          }, 
-          502 // Gateway error
-        );
-      }
-      
-      // Handle successful response
+    // If URL doesn't include credentials but they're provided separately, add them
+    if (username && password && !rtspUrl.includes('@')) {
+      // Parse the URL to extract components
       try {
-        const contentType = response.headers.get("content-type") || "image/jpeg";
-        const imageData = await response.arrayBuffer();
+        const urlObj = new URL(rtspUrl);
+        const encodedUsername = encodeURIComponent(username);
+        const encodedPassword = encodeURIComponent(password);
         
-        if (imageData.byteLength === 0) {
-          return errorResponse("Image data is empty", null, 502);
+        // Reconstruct URL with credentials
+        urlObj.username = encodedUsername;
+        urlObj.password = encodedPassword;
+        targetUrl = urlObj.toString();
+      } catch (parseError) {
+        console.error("Error parsing URL:", parseError);
+        // Fall back to simple concatenation if URL parsing fails
+        const urlParts = rtspUrl.split('://');
+        if (urlParts.length === 2) {
+          const encodedUsername = encodeURIComponent(username);
+          const encodedPassword = encodeURIComponent(password);
+          targetUrl = `${urlParts[0]}://${encodedUsername}:${encodedPassword}@${urlParts[1]}`;
         }
-        
-        // Convert to base64
-        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageData)));
-        
-        return successResponse({ 
-          frameData: `data:${contentType};base64,${base64Image}`,
-          message: "Image successfully captured",
-          size: imageData.byteLength,
-          contentType
-        });
-      } catch (imageError) {
-        return errorResponse("Failed to process image data", imageError.message, 502);
       }
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      // Check if the error is due to timeout
-      if (fetchError.name === 'AbortError') {
-        return errorResponse("Request timed out after 15 seconds", null, 504);
-      }
-      return errorResponse("Failed to fetch image", fetchError.message, 502);
     }
+    
+    console.log("Fetching from target URL (credentials redacted)");
+    
+    // Make request to camera/NVR
+    const response = await fetch(targetUrl, {
+      headers: {
+        "Accept": "image/jpeg, image/png, image/*",
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
+    });
+    
+    if (!response.ok) {
+      console.error(`HTTP error! Status: ${response.status}`);
+      return new Response(
+        JSON.stringify({ 
+          error: `Failed to fetch image: ${response.statusText}`,
+          status: response.status
+        }),
+        { headers: { "Content-Type": "application/json" }, status: response.status }
+      );
+    }
+    
+    // Get response data
+    const imageData = await response.arrayBuffer();
+    const contentType = response.headers.get("Content-Type") || "image/jpeg";
+    
+    // Convert to base64 for easy transport
+    const base64Data = btoa(
+      String.fromCharCode(...new Uint8Array(imageData))
+    );
+    
+    // Construct data URL
+    const dataUrl = `data:${contentType};base64,${base64Data}`;
+    
+    // Return success response with image data
+    return new Response(
+      JSON.stringify({ 
+        message: "Image captured successfully",
+        frameData: dataUrl,
+        contentType,
+        size: imageData.byteLength
+      }),
+      { 
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        }
+      }
+    );
   } catch (error) {
-    return errorResponse(
-      "Failed to process request", 
-      error instanceof Error ? error.message : String(error)
+    // Handle any errors
+    console.error("Edge function error:", error);
+    return new Response(
+      JSON.stringify({ 
+        error: "Failed to process image capture request",
+        details: error.message
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 500 }
     );
   }
 });
