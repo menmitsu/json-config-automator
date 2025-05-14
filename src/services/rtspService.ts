@@ -25,7 +25,7 @@ export const fetchRtspFrame = async (rtspUrl: string): Promise<string | null> =>
       return null;
     }
     
-    console.log("Frame captured successfully");
+    console.log("Frame response received:", data.message || "Success");
     return data.frameData;
   } catch (error) {
     console.error("Error capturing RTSP frame:", error);
