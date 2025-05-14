@@ -2,7 +2,8 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Service to handle RTSP stream captures using FFmpeg via Supabase Edge Function
+ * Service to handle RTSP stream captures using a third-party RTSP to image service
+ * via Supabase Edge Function
  */
 
 // Function to fetch a single frame from an RTSP stream
@@ -22,6 +23,15 @@ export const fetchRtspFrame = async (rtspUrl: string): Promise<string | null> =>
     
     if (data.error) {
       console.error("Error in edge function response:", data.error);
+      
+      // Log any suggestions if available
+      if (data.suggestions) {
+        console.log("Suggestions to fix the issue:");
+        data.suggestions.forEach((suggestion: string, index: number) => {
+          console.log(`${index + 1}. ${suggestion}`);
+        });
+      }
+      
       return null;
     }
     

@@ -23,54 +23,52 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Received request for RTSP URL: ${rtspUrl}`);
+    console.log(`Processing RTSP URL: ${rtspUrl}`);
     
-    // Since we can't run FFmpeg directly in the edge function,
-    // we'll return a placeholder image or suggest alternatives
+    // Encode the RTSP URL for the API request
+    const encodedRtspUrl = encodeURIComponent(rtspUrl);
     
-    // Generating a simple colored rectangle as a placeholder
-    // This is just a temporary solution until we implement a proper solution
-    const width = 640;
-    const height = 480;
-    const canvas = new OffscreenCanvas(width, height);
-    const ctx = canvas.getContext("2d");
+    // Call the RTSP Extract API service
+    // This is a third-party service that converts RTSP streams to images
+    const apiResponse = await fetch(`https://rtspextract.com/api/frame?url=${encodedRtspUrl}&format=jpeg`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
     
-    // Fill with dark gray background
-    ctx.fillStyle = "#333333";
-    ctx.fillRect(0, 0, width, height);
+    if (!apiResponse.ok) {
+      const errorData = await apiResponse.text();
+      console.error("Error from RTSP Extract service:", errorData);
+      throw new Error(`RTSP Extract service returned status: ${apiResponse.status}`);
+    }
     
-    // Add text explaining the situation
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "16px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(`RTSP URL: ${rtspUrl}`, width / 2, height / 2 - 20);
-    ctx.fillText("FFmpeg execution is not available in Edge Functions", width / 2, height / 2 + 10);
-    ctx.fillText("See console for alternative solutions", width / 2, height / 2 + 40);
-    
-    // Convert canvas to blob
-    const blob = await canvas.convertToBlob();
-    const buffer = await blob.arrayBuffer();
+    // Get the image data as a buffer
+    const imageBuffer = await apiResponse.arrayBuffer();
     
     // Convert to base64
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-    
-    console.log("Generated placeholder image as FFmpeg cannot be executed directly in edge functions");
-    console.log("Alternative solutions: 1) Use a dedicated server for FFmpeg, 2) Use a third-party RTSP to image service");
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
     
     return new Response(
       JSON.stringify({ 
-        frameData: `data:image/png;base64,${base64}`,
-        message: "This is a placeholder. FFmpeg cannot be executed directly in edge functions."
+        frameData: `data:image/jpeg;base64,${base64}`,
+        message: "Frame captured via RTSP Extract service" 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error("Error in edge function:", error);
+    console.error("Error processing RTSP frame:", error);
     
+    // If the service fails, provide fallback information and suggestions
     return new Response(
       JSON.stringify({ 
-        error: "Failed to process request",
-        details: error.message 
+        error: "Failed to capture frame from RTSP stream",
+        details: error.message,
+        suggestions: [
+          "Check if the RTSP URL is accessible from the internet",
+          "Verify that the RTSP stream is currently active",
+          "Ensure the RTSP URL includes proper authentication if required"
+        ]
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
