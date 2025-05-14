@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/use-toast";
 
 /**
  * Service to handle HTTP image captures from NVR/camera systems
@@ -38,20 +38,9 @@ export const fetchRtspFrame = async (imageUrl: string): Promise<string | null> =
         console.error("Error details:", data.details);
       }
       
-      // Log method errors if available
-      if (data.methodErrors) {
-        console.error("Authentication method errors:");
-        data.methodErrors.forEach((methodError: string, index: number) => {
-          console.error(`${index + 1}. ${methodError}`);
-        });
-      }
-      
-      // Log any suggestions if available
-      if (data.suggestions) {
-        console.log("Suggestions to fix the issue:");
-        data.suggestions.forEach((suggestion: string, index: number) => {
-          console.log(`${index + 1}. ${suggestion}`);
-        });
+      // Log error text if available
+      if (data.errorText) {
+        console.error("Error text from server:", data.errorText);
       }
       
       // Show toast with error message
