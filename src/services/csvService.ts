@@ -69,3 +69,18 @@ export const fetchCsvData = async (url: string): Promise<Record<string, string>[
     throw error;
   }
 };
+
+// Fetch multiple sheets and combine the data
+export const fetchMultipleSheets = async (urls: string[]): Promise<Record<string, string>[]> => {
+  try {
+    const dataPromises = urls.map(url => fetchCsvData(url));
+    const results = await Promise.all(dataPromises);
+    
+    // Combine all the data from different sheets
+    return results.flat();
+  } catch (error) {
+    console.error("Error fetching multiple sheets:", error);
+    throw error;
+  }
+};
+

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { fetchCsvData } from "@/services/csvService";
+import { fetchCsvData, fetchMultipleSheets } from "@/services/csvService";
 import { Loader2, Search, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -27,8 +26,9 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
   const [isFetchingCsv, setIsFetchingCsv] = useState(false);
   const [suggestedChanges, setSuggestedChanges] = useState<Record<string, any>>({});
 
-  // Default Google Sheet URL
-  const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
+  // Define the Google Sheet URLs
+  const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
+  const SECONDARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=1876766802#gid=1876766802";
   
   // Fetch CSV data on component mount
   useEffect(() => {
@@ -38,17 +38,19 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
   const fetchGoogleSheetData = async () => {
     setIsFetchingCsv(true);
     try {
-      const data = await fetchCsvData(DEFAULT_SHEET_URL);
-      setCsvData(data);
+      // Fetch data from both sheets
+      const combinedData = await fetchMultipleSheets([PRIMARY_SHEET_URL, SECONDARY_SHEET_URL]);
+      setCsvData(combinedData);
+      
       toast({
         title: "CSV Data Loaded",
-        description: `Successfully loaded ${data.length} rows from Google Sheet`,
+        description: `Successfully loaded ${combinedData.length} rows from multiple Google Sheets`,
       });
     } catch (error) {
       console.error("Error fetching Google Sheet data:", error);
       toast({
         title: "Error",
-        description: "Failed to load data from Google Sheet",
+        description: "Failed to load data from Google Sheets",
         variant: "destructive",
       });
     } finally {
@@ -71,7 +73,13 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
           center_name: row["Center Name"],
           fpstream_url: row["Streaming URL"],
           center_id: centerName.toLowerCase().replace(/\s+/g, "_") + "_" + Math.floor(Math.random() * 900 + 100),
-          // Add more mappings as needed
+          // Add more mappings based on secondary sheet
+          streaming_provider: row["Streaming Provider"] || "",
+          number_of_classrooms: row["Number of Class Rooms"] || "",
+          number_of_cameras: row["Number of Cameras Streaming"] || "",
+          download_speed: row["Download Speed-MBPS"] || "",
+          upload_speed: row["Upload Speed-MBPS"] || "",
+          bitrate: row["New Streaming Bit Rate"] || "",
         };
       }
     }
@@ -88,7 +96,13 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
               center_name: row["Center Name"],
               fpstream_url: row["Streaming URL"],
               center_id: centerName.toLowerCase().replace(/\s+/g, "_") + "_" + Math.floor(Math.random() * 900 + 100),
-              // Add more mappings as needed
+              // Add more mappings based on secondary sheet
+              streaming_provider: row["Streaming Provider"] || "",
+              number_of_classrooms: row["Number of Class Rooms"] || "",
+              number_of_cameras: row["Number of Cameras Streaming"] || "",
+              download_speed: row["Download Speed-MBPS"] || "",
+              upload_speed: row["Upload Speed-MBPS"] || "",
+              bitrate: row["New Streaming Bit Rate"] || "",
             };
           }
         }
