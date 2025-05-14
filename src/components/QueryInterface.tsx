@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,9 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
       const combinedData = await fetchMultipleSheets([PRIMARY_SHEET_URL, SECONDARY_SHEET_URL]);
       setCsvData(combinedData);
       
+      // Log the data to see what columns are available
+      console.log("Combined data from sheets:", combinedData);
+      
       toast({
         title: "Data Loaded",
         description: `Successfully loaded ${combinedData.length} rows from Google Sheets`,
@@ -73,7 +77,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         return {
           center_name: row["Center Name"],
           fpstream_url: row["Streaming URL"] || "",
-          public_ip: row["NVR URL"] || ""
+          public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
         };
       }
     }
@@ -86,7 +90,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         return {
           center_name: row["Center Name"],
           fpstream_url: row["Streaming URL"] || "",
-          public_ip: row["NVR URL"] || ""
+          public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
         };
       }
     }
@@ -99,7 +103,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         return {
           center_name: row["Center Name"],
           fpstream_url: row["Streaming URL"] || "",
-          public_ip: row["NVR URL"] || ""
+          public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
         };
       }
     }
@@ -115,7 +119,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
             return {
               center_name: row["Center Name"],
               fpstream_url: row["Streaming URL"] || "",
-              public_ip: row["NVR URL"] || ""
+              public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
             };
           }
         }
