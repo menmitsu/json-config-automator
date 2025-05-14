@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { RefreshCw, AlertCircle, Info, ExternalLink, Check, X, Loader2 } from "lucide-react";
+import { RefreshCw, AlertCircle, Info, ExternalLink, Check, X, Loader2, Server } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { fetchRtspFrame } from "@/services/rtspService";
 
 // List of CORS proxies to try - many options with focus on Indian region
 const CORS_PROXIES = [
@@ -55,9 +56,16 @@ interface ProxyConfig {
 }
 
 const ImageTest = () => {
-  const [imageUrl, setImageUrl] = useState("http://admin:fp%23bl170522@144.48.76.142:8098/ISAPI/Streaming/channels/102/picture");
+  // Main state
+  const [imageUrl, setImageUrl] = useState("http://144.48.76.142:8098/ISAPI/Streaming/channels/102/picture");
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("fp#bl170522");
   const [showImage, setShowImage] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>("direct");
+  const [activeTab, setActiveTab] = useState<string>("rtsp");
+  const [isLoading, setIsLoading] = useState(false);
+  const [dataUri, setDataUri] = useState<string | null>(null);
+  
+  // Proxy state
   const [selectedProxy, setSelectedProxy] = useState(CORS_PROXIES[0].id);
   const [customProxyUrl, setCustomProxyUrl] = useState("");
   const [useCustomProxy, setUseCustomProxy] = useState(false);
@@ -99,7 +107,14 @@ const ImageTest = () => {
 
   const refreshImage = () => {
     setShowImage(true);
-    // Force refresh by appending a cache-busting parameter
+    
+    // For RTSP tab, fetch a new frame
+    if (activeTab === "rtsp") {
+      fetchImageFromRtsp();
+      return;
+    }
+    
+    // For other tabs, force refresh by appending a cache-busting parameter
     const cacheBuster = `?cb=${new Date().getTime()}`;
     const baseUrl = imageUrl.split('?')[0]; // Remove any existing query params
     setImageUrl(`${baseUrl}${cacheBuster}`);
@@ -109,7 +124,7 @@ const ImageTest = () => {
   const getProxiedUrl = () => {
     // Find the selected proxy
     const proxy = useCustomProxy 
-      ? { url: customProxyUrl, id: 'custom', name: 'Custom Proxy' } as ProxyConfig // Cast to ProxyConfig
+      ? { url: customProxyUrl, id: 'custom', name: 'Custom Proxy' } as ProxyConfig
       : CORS_PROXIES.find(p => p.id === selectedProxy) || CORS_PROXIES[0];
     
     // If it's the direct option, just return the image URL
@@ -117,8 +132,11 @@ const ImageTest = () => {
       return imageUrl;
     }
     
+    // Remove credentials from URL for proxy usage
+    const urlWithoutCredentials = imageUrl.replace(/^(http:\/\/)([^@]+@)/, '$1');
+    
     // Remove existing protocol for consistent handling
-    const urlWithoutProtocol = imageUrl.replace(/^https?:\/\//, '');
+    const urlWithoutProtocol = urlWithoutCredentials.replace(/^https?:\/\//, '');
     return `${proxy.url}http://${urlWithoutProtocol}`;
   };
 
@@ -187,6 +205,43 @@ const ImageTest = () => {
     setIsAutotesting(false);
   };
 
+  // Fetch image using RTSP service
+  const fetchImageFromRtsp = async () => {
+    setIsLoading(true);
+    setDataUri(null);
+    
+    try {
+      // Remove credentials from URL for service
+      const urlWithoutCredentials = imageUrl.replace(/^(http:\/\/)([^@]+@)/, '$1');
+      
+      // Fetch frame from RTSP service
+      const frameData = await fetchRtspFrame(urlWithoutCredentials, username, password);
+      
+      if (frameData) {
+        setDataUri(frameData);
+        toast({
+          title: "Success",
+          description: "Image loaded successfully via RTSP service",
+        });
+      } else {
+        toast({
+          title: "Image Load Failed",
+          description: "Could not load the image via RTSP service",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching RTSP frame:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <h1 className="text-3xl font-bold mb-6">Image Loading Test Page</h1>
@@ -197,7 +252,7 @@ const ImageTest = () => {
           <AlertTitle>Mixed Content Warning</AlertTitle>
           <AlertDescription>
             You're trying to load HTTP content on an HTTPS page ({protocol}), which browsers block by default.
-            Try using the Proxy tab or open this page directly on HTTP.
+            Try using the RTSP or Proxy tab or open this page directly on HTTP.
           </AlertDescription>
         </Alert>
       )}
@@ -219,6 +274,28 @@ const ImageTest = () => {
               <p className="text-xs text-muted-foreground mt-1">
                 Current page protocol: <strong>{protocol}</strong>
               </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="username">Username</Label>
+                <Input 
+                  id="username" 
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="font-mono text-sm"
+                />
+              </div>
+              <div>
+                <Label htmlFor="password">Password</Label>
+                <Input 
+                  id="password" 
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="font-mono text-sm"
+                />
+              </div>
             </div>
             
             {activeTab === "proxy" && (
@@ -315,9 +392,10 @@ const ImageTest = () => {
       </Card>
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="direct">Direct Access</TabsTrigger>
-          <TabsTrigger value="proxy">Use Proxy (For HTTPS pages)</TabsTrigger>
+          <TabsTrigger value="proxy">Use Proxy</TabsTrigger>
+          <TabsTrigger value="rtsp">RTSP Service</TabsTrigger>
         </TabsList>
         
         <TabsContent value="direct">
@@ -449,6 +527,49 @@ const ImageTest = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="rtsp">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Server className="h-4 w-4" />
+                RTSP Service
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="border p-4 rounded-md">
+                <div className="flex justify-center">
+                  {isLoading ? (
+                    <div className="text-center p-8">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                      <p>Loading image via RTSP service...</p>
+                    </div>
+                  ) : dataUri ? (
+                    <img
+                      src={dataUri}
+                      alt="RTSP frame"
+                      className="max-w-full h-auto border"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-8 text-center bg-gray-100 rounded-md">
+                      <p className="mb-4">Click "Reload Image" to fetch the image via our RTSP service</p>
+                      <Button onClick={fetchImageFromRtsp}>Fetch Image</Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <Alert className="mt-6">
+                <Info className="h-4 w-4" />
+                <AlertTitle>About RTSP Service</AlertTitle>
+                <AlertDescription>
+                  This service uses a Supabase Edge Function to securely fetch the image on the server-side,
+                  avoiding mixed content issues. It works with HTTP URLs even on HTTPS pages.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <Card>
@@ -471,6 +592,7 @@ const ImageTest = () => {
             
             <h4>Solutions:</h4>
             <ul>
+              <li>Use our RTSP service (recommended)</li>
               <li>Ensure all resources use HTTPS</li>
               <li>Use a CORS proxy service (as demonstrated in the Proxy tab)</li>
               <li>
