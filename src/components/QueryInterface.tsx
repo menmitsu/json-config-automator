@@ -7,7 +7,10 @@ import { toast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fetchCsvData } from "@/services/csvService";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, Check, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 interface QueryInterfaceProps {
   onUpdateConfig: (newData: any) => void;
@@ -22,6 +25,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
   const [useCustomApi, setUseCustomApi] = useState(false);
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [isFetchingCsv, setIsFetchingCsv] = useState(false);
+  const [suggestedChanges, setSuggestedChanges] = useState<Record<string, any>>({});
 
   // Default Google Sheet URL
   const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -98,6 +102,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
   const processQuery = async (questionText: string) => {
     setIsLoading(true);
     setResponse("Processing request...");
+    setSuggestedChanges({});
 
     try {
       // Try to find matching data from CSV
@@ -115,7 +120,8 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
           updates.channel = Math.floor(Math.random() * 999) + 1;
         }
         
-        setResponse(`Found information in Google Sheet for "${csvMatch.center_name}". Updated configuration with streaming URL and other details.`);
+        setResponse(`Found information in Google Sheet for "${csvMatch.center_name}". Review the suggested changes below.`);
+        setSuggestedChanges(updates);
       } else {
         // Fallback to the default mock behavior if no CSV match found
         const lowerQuery = questionText.toLowerCase();
@@ -158,15 +164,11 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         }
 
         if (Object.keys(updates).length > 0) {
-          setResponse(`Updated configuration with new values for: ${Object.keys(updates).join(", ")}`);
+          setResponse(`Here are suggested changes based on your query. Review and apply if they look good.`);
+          setSuggestedChanges(updates);
         } else {
           setResponse("I couldn't find any specific configuration to update based on your question. Please be more specific about what you want to update (e.g., camera, center, classroom, IP, streaming URL, WhatsApp group, channel).");
         }
-      }
-
-      // If we have updates to make
-      if (Object.keys(updates).length > 0) {
-        onUpdateConfig(updates);
       }
     } catch (error) {
       console.error("Error processing query:", error);
@@ -188,7 +190,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
     if (!query.trim()) {
       toast({
         title: "Empty Query",
-        description: "Please enter a question to update the configuration.",
+        description: "Please enter a question to suggest configuration changes.",
         variant: "destructive",
       });
       return;
@@ -204,6 +206,49 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
     }
 
     await processQuery(query);
+  };
+
+  const acceptAllChanges = () => {
+    if (Object.keys(suggestedChanges).length === 0) {
+      toast({
+        title: "No Changes",
+        description: "There are no suggested changes to apply.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    onUpdateConfig(suggestedChanges);
+    toast({
+      title: "Changes Applied",
+      description: `Applied ${Object.keys(suggestedChanges).length} configuration changes.`
+    });
+    setSuggestedChanges({});
+  };
+
+  const acceptSingleChange = (key: string, value: any) => {
+    onUpdateConfig({ [key]: value });
+    
+    // Remove this key from suggested changes
+    const updatedSuggestions = { ...suggestedChanges };
+    delete updatedSuggestions[key];
+    setSuggestedChanges(updatedSuggestions);
+    
+    toast({
+      title: "Change Applied",
+      description: `Updated "${key}" in your configuration.`
+    });
+  };
+
+  const rejectSingleChange = (key: string) => {
+    // Remove this key from suggested changes
+    const updatedSuggestions = { ...suggestedChanges };
+    delete updatedSuggestions[key];
+    setSuggestedChanges(updatedSuggestions);
+    
+    toast({
+      description: `Rejected change for "${key}".`
+    });
   };
 
   return (
@@ -262,9 +307,58 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
       </Button>
 
       {response && (
-        <div className="mt-4 p-3 bg-gray-100 rounded-md text-sm">
+        <div className="mt-4 p-3 bg-gray-50 rounded-md">
           <p className="font-medium mb-1">Response:</p>
-          <p>{response}</p>
+          <p className="text-sm">{response}</p>
+        </div>
+      )}
+
+      {Object.keys(suggestedChanges).length > 0 && (
+        <div className="mt-4 border rounded-md overflow-hidden">
+          <div className="bg-gray-50 p-3 border-b">
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium">Suggested Changes</h3>
+              <Button onClick={acceptAllChanges} size="sm" variant="outline" className="h-8 text-xs">
+                Apply All
+              </Button>
+            </div>
+          </div>
+          
+          <ScrollArea className="max-h-80">
+            <div className="divide-y">
+              {Object.entries(suggestedChanges).map(([key, value]) => (
+                <div key={key} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{key}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {typeof value === 'number' ? 'number' : 'text'}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-500 break-all">{value?.toString()}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => acceptSingleChange(key, value)} 
+                      size="sm" 
+                      variant="ghost" 
+                      className="h-8 w-8 p-0"
+                    >
+                      <Check className="h-4 w-4 text-green-500" />
+                    </Button>
+                    <Button 
+                      onClick={() => rejectSingleChange(key)} 
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
         </div>
       )}
     </form>
