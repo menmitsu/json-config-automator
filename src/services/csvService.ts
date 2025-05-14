@@ -70,17 +70,76 @@ export const fetchCsvData = async (url: string): Promise<Record<string, string>[
   }
 };
 
+// Process data to create a consolidated dataset with center information
+const processCenterData = (streamingData: Record<string, string>[], nvrData: Record<string, string>[]): Record<string, string>[] => {
+  // Create a map to easily lookup NVR data by center name
+  const nvrDataMap = new Map<string, Record<string, string>>();
+  
+  // Process NVR data and clean up center names
+  nvrData.forEach(row => {
+    if (row["Center Name"]) {
+      // Clean up the center name (remove quotes and extra text)
+      let centerName = row["Center Name"].replace(/^["']|["']$/g, '');
+      // Remove anything after a double quote if it exists
+      const quoteIndex = centerName.indexOf('"');
+      if (quoteIndex > 0) {
+        centerName = centerName.substring(0, quoteIndex).trim();
+      }
+      nvrDataMap.set(centerName.toLowerCase(), row);
+    }
+  });
+  
+  // Merge streaming data with NVR data
+  return streamingData.map(streamRow => {
+    if (!streamRow["Center Name"]) return streamRow;
+    
+    // Clean center name for lookup
+    let centerName = streamRow["Center Name"].replace(/^["']|["']$/g, '');
+    const quoteIndex = centerName.indexOf('"');
+    if (quoteIndex > 0) {
+      centerName = centerName.substring(0, quoteIndex).trim();
+    }
+    
+    const nvrRow = nvrDataMap.get(centerName.toLowerCase());
+    
+    if (nvrRow) {
+      // Create a merged row with data from both sheets
+      return {
+        ...streamRow,
+        "NVR Login URL": nvrRow["NVR Login URL"] || "",
+        "Login ID": nvrRow["Login ID"] || "",
+        "Password": nvrRow["Password"] || "",
+        "Local URL/ Public ip": nvrRow["Local URL/ Public ip"] || ""
+      };
+    }
+    
+    return streamRow;
+  });
+};
+
 // Fetch multiple sheets and combine the data
 export const fetchMultipleSheets = async (urls: string[]): Promise<Record<string, string>[]> => {
   try {
-    const dataPromises = urls.map(url => fetchCsvData(url));
-    const results = await Promise.all(dataPromises);
+    if (urls.length !== 2) {
+      throw new Error("Expected exactly 2 sheet URLs: one for streaming data and one for NVR data");
+    }
     
-    // Combine all the data from different sheets
-    return results.flat();
+    // Fetch data from both sheets
+    const [streamingData, nvrData] = await Promise.all([
+      fetchCsvData(urls[0]),
+      fetchCsvData(urls[1])
+    ]);
+    
+    console.log("Streaming sheet data:", streamingData);
+    console.log("NVR sheet data:", nvrData);
+    
+    // Process and merge the data from both sheets
+    const combinedData = processCenterData(streamingData, nvrData);
+    console.log("Combined and processed data:", combinedData);
+    
+    return combinedData;
   } catch (error) {
     console.error("Error fetching multiple sheets:", error);
     throw error;
   }
 };
-

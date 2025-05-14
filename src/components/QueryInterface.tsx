@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -77,7 +76,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         return {
           center_name: row["Center Name"],
           fpstream_url: row["Streaming URL"] || "",
-          public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
+          public_ip: row["NVR Login URL"] || ""
         };
       }
     }
@@ -90,7 +89,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         return {
           center_name: row["Center Name"],
           fpstream_url: row["Streaming URL"] || "",
-          public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
+          public_ip: row["NVR Login URL"] || ""
         };
       }
     }
@@ -103,7 +102,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         return {
           center_name: row["Center Name"],
           fpstream_url: row["Streaming URL"] || "",
-          public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
+          public_ip: row["NVR Login URL"] || ""
         };
       }
     }
@@ -119,7 +118,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
             return {
               center_name: row["Center Name"],
               fpstream_url: row["Streaming URL"] || "",
-              public_ip: row["NVR Login URL"] || row["NVR URL"] || "" // Check both column names
+              public_ip: row["NVR Login URL"] || ""
             };
           }
         }
