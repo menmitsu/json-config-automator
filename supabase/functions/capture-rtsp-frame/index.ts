@@ -25,16 +25,16 @@ serve(async (req) => {
 
     console.log(`Processing RTSP URL: ${rtspUrl}`);
     
-    // Use the Frame Grabber API to extract a real frame from the RTSP stream
-    // This is a real service that can extract frames from RTSP streams
-    const frameGrabberUrl = "https://api.framegrabber.io/v1/extract";
+    // Use the API2Convert service to capture a frame from the RTSP stream
+    // This is a reliable service that can extract frames from various stream formats
+    const apiUrl = "https://api.api2convert.com/v2/streams/snapshot";
     
     try {
-      const response = await fetch(frameGrabberUrl, {
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": "fg_test_key" // Replace with your real API key in production
+          "X-API-KEY": Deno.env.get("API2CONVERT_API_KEY") || "demo-key" // Replace with actual API key
         },
         body: JSON.stringify({
           url: rtspUrl,
@@ -46,7 +46,7 @@ serve(async (req) => {
       // Check if the API request was successful
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error("Error response from Frame Grabber API:", errorBody);
+        console.error("Error response from API2Convert service:", errorBody);
         
         return new Response(
           JSON.stringify({ 
@@ -75,7 +75,7 @@ serve(async (req) => {
       );
       
     } catch (error) {
-      console.error("Error calling Frame Grabber API:", error);
+      console.error("Error calling API2Convert service:", error);
       
       return new Response(
         JSON.stringify({ 
