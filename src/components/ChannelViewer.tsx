@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,11 +114,15 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     const { cleanIp, extractedPort } = formatIpAddress(ipAddress);
     const portToUse = extractedPort || port || "80";
     
-    // Include authentication directly in the URL
-    let baseUrl = `http://${loginId}:${password}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+    // URL encode the username and password
+    const encodedLoginId = encodeURIComponent(loginId);
+    const encodedPassword = encodeURIComponent(password);
     
-    // Update HTTP command for display
-    setHttpCommand(`curl -u "${loginId}:${password}" "http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture" -o snapshot.jpg`);
+    // Build the URL with encoded credentials
+    let baseUrl = `http://${encodedLoginId}:${encodedPassword}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+    
+    // Update HTTP command for display with proper escaping for terminal
+    setHttpCommand(`curl -u "${loginId}:${password.replace(/"/g, '\\"')}" "http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture" -o snapshot.jpg`);
     
     return baseUrl;
   };
@@ -211,13 +214,17 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     }
     
     // Also update the direct image test URL
-    const directUrl = `http://${loginID || "admin"}:${pwd || "fp123456"}@${cleanIp}:${extractedPort || "80"}/ISAPI/Streaming/channels/102/picture`;
+    const encodedLoginID = encodeURIComponent(loginID || "admin");
+    const encodedPwd = encodeURIComponent(pwd || "fp123456");
+    
+    const portToUse = extractedPort || "80";
+    const directUrl = `http://${encodedLoginID}:${encodedPwd}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/102/picture`;
     setDirectImageUrl(directUrl);
     setShowDirectImage(true); // Reset display state
     
     toast({
       title: "Center Selected",
-      description: `IP Address set to ${cleanIp}${extractedPort ? `, Port: ${extractedPort}` : ""}${loginID ? `, Login ID: ${loginID}` : ""}${pwd ? `, Password: ${pwd}` : ""}`,
+      description: `IP Address set to ${cleanIp}${extractedPort ? `, Port: ${extractedPort}` : ""}${loginID ? `, Login ID: ${loginID}` : ""}${pwd ? `, Password set` : ""}`,
     });
     
     // Clear search results
@@ -279,14 +286,23 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
 
   // Function to refresh the direct image test URL
   const refreshDirectImageUrl = () => {
-    // Re-create URL without timestamp
-    const baseUrl = directImageUrl.split('?')[0];
-    setDirectImageUrl(baseUrl);
+    // Re-create URL with proper encoding but without timestamp
+    const { cleanIp, extractedPort } = formatIpAddress(ipAddress || "");
+    const portToUse = extractedPort || port || "80";
+    
+    // Properly encode the credentials
+    const encodedLoginID = encodeURIComponent(loginId);
+    const encodedPassword = encodeURIComponent(password);
+    
+    // Build the URL with proper encoding
+    const newUrl = `http://${encodedLoginID}:${encodedPassword}@${cleanIp || "122.176.135.50"}:${portToUse}/ISAPI/Streaming/channels/102/picture`;
+    
+    setDirectImageUrl(newUrl);
     setShowDirectImage(true); // Reset display state
     
     toast({
       title: "Test Image Refreshed",
-      description: "Direct image test URL refreshed"
+      description: "Direct image test URL refreshed with encoded credentials"
     });
   };
 
@@ -551,7 +567,10 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Complete URL: {directImageUrl}
+            Complete URL: <span className="font-mono break-all">{directImageUrl}</span>
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Note: Special characters like # have been URL encoded as %23
           </p>
         </CardContent>
       </Card>
