@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -293,11 +292,14 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
                 // Skip center_name - just show it as reference but don't offer to update it
                 if (key === "center_name") return null;
                 
+                // Add a label to help users understand what public_ip means
+                const displayLabel = key === "public_ip" ? "public_ip (NVR Login URL)" : key;
+                
                 return (
                   <div key={key} className="p-3 flex items-center justify-between hover:bg-gray-50">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{key}</span>
+                        <span className="font-medium">{displayLabel}</span>
                         <Badge variant="outline" className="text-xs">
                           {typeof value === 'number' ? 'number' : 'text'}
                         </Badge>
