@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { fetchCsvData, fetchMultipleSheets } from "@/services/csvService";
+import { fetchMultipleSheets } from "@/services/csvService";
 import { Loader2, Search, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,7 +31,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
   const SECONDARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=1876766802#gid=1876766802";
   
-  // Fetch CSV data on component mount
+  // Fetch Google Sheets data on component mount
   useEffect(() => {
     fetchGoogleSheetData();
   }, []);
@@ -43,8 +44,8 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
       setCsvData(combinedData);
       
       toast({
-        title: "CSV Data Loaded",
-        description: `Successfully loaded ${combinedData.length} rows from multiple Google Sheets`,
+        title: "Data Loaded",
+        description: `Successfully loaded ${combinedData.length} rows from Google Sheets`,
       });
     } catch (error) {
       console.error("Error fetching Google Sheet data:", error);
@@ -58,51 +59,64 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
     }
   };
 
-  // Find matching data from CSV based on query
-  const findMatchingCsvData = (queryText: string): Record<string, any> | null => {
+  // Find matching center data from Google Sheets based on query
+  const findMatchingCenterData = (queryText: string): Record<string, any> | null => {
     if (!csvData.length) return null;
     
-    const lowerQuery = queryText.toLowerCase();
+    const centerQuery = queryText.trim().toLowerCase();
+    if (!centerQuery) return null;
     
-    // Search for center name in the query
+    // Exact match
     for (const row of csvData) {
       const centerName = row["Center Name"]?.toLowerCase() || "";
       
-      if (centerName && lowerQuery.includes(centerName.toLowerCase())) {
+      if (centerName && centerName === centerQuery) {
         return {
           center_name: row["Center Name"],
-          fpstream_url: row["Streaming URL"],
-          center_id: centerName.toLowerCase().replace(/\s+/g, "_") + "_" + Math.floor(Math.random() * 900 + 100),
-          // Add more mappings based on secondary sheet
-          streaming_provider: row["Streaming Provider"] || "",
-          number_of_classrooms: row["Number of Class Rooms"] || "",
-          number_of_cameras: row["Number of Cameras Streaming"] || "",
-          download_speed: row["Download Speed-MBPS"] || "",
-          upload_speed: row["Upload Speed-MBPS"] || "",
-          bitrate: row["New Streaming Bit Rate"] || "",
+          fpstream_url: row["Streaming URL"] || "",
+          public_ip: row["NVR URL"] || ""
         };
       }
     }
     
-    // Search for partial matches if exact match not found
+    // Partial match - starts with
+    for (const row of csvData) {
+      const centerName = row["Center Name"]?.toLowerCase() || "";
+      
+      if (centerName && centerName.startsWith(centerQuery)) {
+        return {
+          center_name: row["Center Name"],
+          fpstream_url: row["Streaming URL"] || "",
+          public_ip: row["NVR URL"] || ""
+        };
+      }
+    }
+    
+    // Partial match - contains
+    for (const row of csvData) {
+      const centerName = row["Center Name"]?.toLowerCase() || "";
+      
+      if (centerName && centerName.includes(centerQuery)) {
+        return {
+          center_name: row["Center Name"],
+          fpstream_url: row["Streaming URL"] || "",
+          public_ip: row["NVR URL"] || ""
+        };
+      }
+    }
+    
+    // Word match
     for (const row of csvData) {
       const centerName = row["Center Name"]?.toLowerCase() || "";
       
       if (centerName) {
-        const centerWords = centerName.split(/\s+/);
-        for (const word of centerWords) {
-          if (word.length > 3 && lowerQuery.includes(word.toLowerCase())) {
+        const words = centerQuery.split(/\s+/);
+        for (const word of words) {
+          if (word.length > 2 && centerName.includes(word)) {
             return {
               center_name: row["Center Name"],
-              fpstream_url: row["Streaming URL"],
-              center_id: centerName.toLowerCase().replace(/\s+/g, "_") + "_" + Math.floor(Math.random() * 900 + 100),
-              // Add more mappings based on secondary sheet
-              streaming_provider: row["Streaming Provider"] || "",
-              number_of_classrooms: row["Number of Class Rooms"] || "",
-              number_of_cameras: row["Number of Cameras Streaming"] || "",
-              download_speed: row["Download Speed-MBPS"] || "",
-              upload_speed: row["Upload Speed-MBPS"] || "",
-              bitrate: row["New Streaming Bit Rate"] || "",
+              fpstream_url: row["Streaming URL"] || "",
+              public_ip: row["NVR URL"] || ""
             };
           }
         }
@@ -112,81 +126,25 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
     return null;
   };
 
-  // Process query and update config based on CSV data
-  const processQuery = async (questionText: string) => {
+  // Process query to find matching center
+  const processQuery = async (centerNameQuery: string) => {
     setIsLoading(true);
-    setResponse("Processing request...");
+    setResponse("Searching for center...");
     setSuggestedChanges({});
 
     try {
-      // Try to find matching data from CSV
-      const csvMatch = findMatchingCsvData(questionText);
+      // Try to find matching center from Google Sheets data
+      const match = findMatchingCenterData(centerNameQuery);
       
-      // Initialize updates object
-      let updates: Record<string, any> = {};
-      
-      // If we found a match in the CSV
-      if (csvMatch) {
-        updates = { ...csvMatch };
-        
-        // If streaming URL found, generate a channel number
-        if (csvMatch.fpstream_url) {
-          updates.channel = Math.floor(Math.random() * 999) + 1;
-        }
-        
-        setResponse(`Found information in Google Sheet for "${csvMatch.center_name}". Review the suggested changes below.`);
-        setSuggestedChanges(updates);
+      if (match) {
+        setResponse(`Found information for "${match.center_name}". Review the suggested updates below.`);
+        setSuggestedChanges(match);
       } else {
-        // Fallback to the default mock behavior if no CSV match found
-        const lowerQuery = questionText.toLowerCase();
-
-        // This is just a demonstration - in a real app, you'd connect to actual APIs
-        if (lowerQuery.includes("camera")) {
-          updates.camera_id = `CAM-${Math.floor(Math.random() * 9000) + 1000}`;
-        }
-        
-        if (lowerQuery.includes("center") || lowerQuery.includes("branch")) {
-          const centers = ["Dwarka", "Rohini", "Vasant Kunj", "Noida", "Gurgaon"];
-          const randomCenter = centers[Math.floor(Math.random() * centers.length)];
-          updates.center_id = `${randomCenter.toLowerCase()}_${Math.floor(Math.random() * 900) + 100}`;
-          updates.center_name = `${randomCenter} Branch`;
-        }
-        
-        if (lowerQuery.includes("classroom")) {
-          const classroomSizes = ["small", "medium", "large"];
-          const randomSize = classroomSizes[Math.floor(Math.random() * classroomSizes.length)];
-          updates.classroom_size = randomSize;
-          updates.classroom_name = `Classroom ${String.fromCharCode(65 + Math.floor(Math.random() * 6))}`;
-          updates.classroom_code = `${currentConfig.center_id || "center"}_${Math.floor(Math.random() * 9000) + 1000}`;
-        }
-
-        if (lowerQuery.includes("ip") || lowerQuery.includes("address")) {
-          updates.public_ip = `${Math.floor(Math.random() * 223) + 1}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-          updates.cut_evidence_ip = `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
-        }
-
-        if (lowerQuery.includes("stream") || lowerQuery.includes("url")) {
-          updates.fpstream_url = `https://fp.streamonweb.com/footprints/live/${(currentConfig.center_id || "center").toLowerCase()}stream${Math.floor(Math.random() * 100)}`;
-        }
-
-        if (lowerQuery.includes("whatsapp") || lowerQuery.includes("group")) {
-          updates.whatsapp_group_id = `${Math.floor(Math.random() * 9000000000) + 1000000000}@group.whatsapp.com`;
-        }
-
-        if (lowerQuery.includes("channel")) {
-          updates.channel = Math.floor(Math.random() * 999) + 1;
-        }
-
-        if (Object.keys(updates).length > 0) {
-          setResponse(`Here are suggested changes based on your query. Review and apply if they look good.`);
-          setSuggestedChanges(updates);
-        } else {
-          setResponse("I couldn't find any specific configuration to update based on your question. Please be more specific about what you want to update (e.g., camera, center, classroom, IP, streaming URL, WhatsApp group, channel).");
-        }
+        setResponse("No matching center found. Please check the center name and try again.");
       }
     } catch (error) {
       console.error("Error processing query:", error);
-      setResponse("An error occurred while processing your query. Please try again.");
+      setResponse("An error occurred while searching for the center. Please try again.");
       
       toast({
         title: "Error",
@@ -204,16 +162,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
     if (!query.trim()) {
       toast({
         title: "Empty Query",
-        description: "Please enter a question to suggest configuration changes.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (useCustomApi && !customApiUrl) {
-      toast({
-        title: "Missing API URL",
-        description: "Please provide a custom API URL or disable the custom API option.",
+        description: "Please enter a center name to search.",
         variant: "destructive",
       });
       return;
@@ -269,7 +218,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor="query">Ask a question to update the configuration</Label>
+          <Label htmlFor="query">Enter a center name to search</Label>
           {isFetchingCsv ? (
             <div className="text-xs text-muted-foreground flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -278,7 +227,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
           ) : csvData.length > 0 ? (
             <div className="text-xs text-green-600 flex items-center gap-1">
               <Search className="h-3 w-3" /> 
-              {csvData.length} rows loaded
+              {csvData.length} centers loaded
             </div>
           ) : (
             <Button type="button" onClick={fetchGoogleSheetData} variant="outline" size="sm" className="h-6 text-xs">
@@ -288,7 +237,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         </div>
         <Textarea
           id="query"
-          placeholder="e.g., What's the streaming URL for Dwarka center?"
+          placeholder="Enter center name (e.g., Dwarka)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="min-h-[100px]"
@@ -317,7 +266,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
       )}
 
       <Button type="submit" disabled={isLoading} className="w-full">
-        {isLoading ? "Processing..." : "Submit Query"}
+        {isLoading ? "Searching..." : "Search Center"}
       </Button>
 
       {response && (
@@ -331,7 +280,7 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
         <div className="mt-4 border rounded-md overflow-hidden">
           <div className="bg-gray-50 p-3 border-b">
             <div className="flex items-center justify-between">
-              <h3 className="font-medium">Suggested Changes</h3>
+              <h3 className="font-medium">Suggested Updates</h3>
               <Button onClick={acceptAllChanges} size="sm" variant="outline" className="h-8 text-xs">
                 Apply All
               </Button>
@@ -340,37 +289,55 @@ const QueryInterface: React.FC<QueryInterfaceProps> = ({ onUpdateConfig, current
           
           <ScrollArea className="max-h-80">
             <div className="divide-y">
-              {Object.entries(suggestedChanges).map(([key, value]) => (
-                <div key={key} className="p-3 flex items-center justify-between hover:bg-gray-50">
+              {Object.entries(suggestedChanges).map(([key, value]) => {
+                // Skip center_name - just show it as reference but don't offer to update it
+                if (key === "center_name") return null;
+                
+                return (
+                  <div key={key} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{key}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {typeof value === 'number' ? 'number' : 'text'}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-gray-500 break-all">{value?.toString()}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => acceptSingleChange(key, value)} 
+                        size="sm" 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0"
+                      >
+                        <Check className="h-4 w-4 text-green-500" />
+                      </Button>
+                      <Button 
+                        onClick={() => rejectSingleChange(key)} 
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Always show the center_name as reference info */}
+              {suggestedChanges.center_name && (
+                <div className="p-3 bg-gray-50">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{key}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {typeof value === 'number' ? 'number' : 'text'}
-                      </Badge>
+                      <span className="font-medium">Center Name</span>
+                      <Badge variant="secondary" className="text-xs">reference</Badge>
                     </div>
-                    <div className="text-sm text-gray-500 break-all">{value?.toString()}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={() => acceptSingleChange(key, value)} 
-                      size="sm" 
-                      variant="ghost" 
-                      className="h-8 w-8 p-0"
-                    >
-                      <Check className="h-4 w-4 text-green-500" />
-                    </Button>
-                    <Button 
-                      onClick={() => rejectSingleChange(key)} 
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0"
-                    >
-                      <X className="h-4 w-4 text-red-500" />
-                    </Button>
+                    <div className="text-sm text-gray-500">{suggestedChanges.center_name}</div>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </ScrollArea>
         </div>
