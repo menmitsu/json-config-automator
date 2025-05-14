@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { RefreshCw, AlertCircle, Info, ExternalLink, Check, X } from "lucide-react";
+import { RefreshCw, AlertCircle, Info, ExternalLink, Check, X, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,6 +46,13 @@ const CORS_PROXIES = [
   { id: "localproxy", url: "http://localhost:8080/", name: "Local Proxy (Dev)" },
   { id: "directproxy", url: "", name: "Direct (No Proxy)" },
 ];
+
+// Define a proper type for the proxy object
+interface ProxyConfig {
+  id: string;
+  url: string;
+  name: string;
+}
 
 const ImageTest = () => {
   const [imageUrl, setImageUrl] = useState("http://admin:fp%23bl170522@144.48.76.142:8098/ISAPI/Streaming/channels/102/picture");
@@ -102,7 +109,7 @@ const ImageTest = () => {
   const getProxiedUrl = () => {
     // Find the selected proxy
     const proxy = useCustomProxy 
-      ? { url: customProxyUrl } 
+      ? { url: customProxyUrl, id: 'custom', name: 'Custom Proxy' } as ProxyConfig // Cast to ProxyConfig
       : CORS_PROXIES.find(p => p.id === selectedProxy) || CORS_PROXIES[0];
     
     // If it's the direct option, just return the image URL
