@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { Loader2, Play, Video, Search, RefreshCw, Image, Terminal } from "lucide-react";
+import { Loader2, Play, Video, Search, RefreshCw, Image, Terminal, AlertCircle, ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { fetchMultipleSheets } from "@/services/csvService";
@@ -30,6 +30,10 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [httpCommand, setHttpCommand] = useState("");
   const [directImageUrl, setDirectImageUrl] = useState("http://admin:fp123456@122.176.135.50:8098/ISAPI/Streaming/channels/102/picture");
   const [showDirectImage, setShowDirectImage] = useState(true);
+  const [useProxy, setUseProxy] = useState(false);
+  const [corsProxyUrl, setCorsProxyUrl] = useState("https://corsproxy.io/?");
+  const [protocol, setProtocol] = useState("");
+  const [hasMixedContentWarning, setHasMixedContentWarning] = useState(false);
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -87,6 +91,15 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     }
   };
 
+  // Check the current protocol on component mount
+  useEffect(() => {
+    setProtocol(window.location.protocol);
+    // Check for potential mixed content issues
+    if (window.location.protocol === "https:") {
+      setHasMixedContentWarning(true);
+    }
+  }, []);
+
   // Format IP address and port
   const formatIpAddress = (ip: string): { cleanIp: string, extractedPort: string | null } => {
     // Remove protocol prefix if present
@@ -120,6 +133,12 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     
     // Build the URL with encoded credentials
     let baseUrl = `http://${encodedLoginId}:${encodedPassword}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+    
+    // If we're using a proxy to avoid mixed content issues
+    if (useProxy && corsProxyUrl && protocol === "https:") {
+      // Remove credentials for proxy URL (safer approach)
+      baseUrl = `${corsProxyUrl}http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+    }
     
     // Update HTTP command for display with proper escaping for terminal
     setHttpCommand(`curl -u "${loginId}:${password.replace(/"/g, '\\"')}" "http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture" -o snapshot.jpg`);
@@ -408,6 +427,62 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           />
         </div>
       </div>
+
+      {/* Mixed Content Warning */}
+      {hasMixedContentWarning && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+          <div className="flex">
+            <AlertCircle className="h-5 w-5 text-yellow-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">Mixed Content Warning</h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>
+                  You're viewing this page over HTTPS, but camera streams use HTTP. 
+                  This may cause images to be blocked by your browser.
+                </p>
+                <div className="mt-2">
+                  <div className="flex items-center">
+                    <input
+                      id="useProxy"
+                      type="checkbox"
+                      checked={useProxy}
+                      onChange={(e) => setUseProxy(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="useProxy" className="ml-2 text-sm text-gray-900">
+                      Use CORS Proxy (may help with HTTPS)
+                    </label>
+                  </div>
+                  {useProxy && (
+                    <div className="mt-2">
+                      <Input
+                        value={corsProxyUrl}
+                        onChange={(e) => setCorsProxyUrl(e.target.value)}
+                        placeholder="https://corsproxy.io/?"
+                        className="text-xs"
+                      />
+                      <p className="mt-1 text-xs">
+                        Note: Using a proxy will not send login credentials for security reasons.
+                      </p>
+                    </div>
+                  )}
+                  <p className="mt-2">
+                    <a 
+                      href="/image-test" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 inline-flex items-center"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      Open dedicated image test page
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Channel tabs and buttons */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
