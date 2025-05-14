@@ -1,17 +1,23 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { RefreshCw, AlertCircle, Info, ExternalLink, Check, X } from "lucide-react";
+import { RefreshCw, AlertCircle, Info, ExternalLink, Check, X, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+// Define proper types for the CORS proxies
+interface ProxyConfig {
+  id: string;
+  url: string;
+  name: string;
+}
+
 // List of CORS proxies to try - many options with focus on Indian region
-const CORS_PROXIES = [
+const CORS_PROXIES: ProxyConfig[] = [
   { id: "corsproxy", url: "https://corsproxy.io/?", name: "CORS Proxy IO" },
   { id: "corsanywhere", url: "https://cors-anywhere.herokuapp.com/", name: "CORS Anywhere" },
   { id: "allorigins", url: "https://api.allorigins.win/raw?url=", name: "All Origins" },
@@ -102,7 +108,7 @@ const ImageTest = () => {
   const getProxiedUrl = () => {
     // Find the selected proxy
     const proxy = useCustomProxy 
-      ? { url: customProxyUrl } 
+      ? { id: 'custom', url: customProxyUrl, name: 'Custom' } // Ensure proxy has all required fields
       : CORS_PROXIES.find(p => p.id === selectedProxy) || CORS_PROXIES[0];
     
     // If it's the direct option, just return the image URL
