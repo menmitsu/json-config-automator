@@ -319,6 +319,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
 
   return (
     <div className="space-y-6">
+      {/* Search section */}
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="centerQuery">Search for a center</Label>
@@ -368,6 +369,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
         )}
       </div>
 
+      {/* Credential inputs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label htmlFor="ipAddress">NVR URL</Label>
@@ -405,6 +407,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
         </div>
       </div>
 
+      {/* Channel tabs and buttons */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="standard">Standard Channels (101-120)</TabsTrigger>
@@ -426,6 +429,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
         ))}
       </div>
 
+      {/* Main image display card */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -440,6 +444,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
         </CardHeader>
         <CardContent>
           <AspectRatio ratio={16/9} className="bg-muted relative overflow-hidden rounded-md">
+            {/* Image loading states */}
             {isLoading ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -543,6 +548,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
                   className="max-w-full h-auto"
                   onError={handleDirectImageError}
                   onLoad={() => console.log("Direct image test loaded successfully")}
+                  referrerPolicy="no-referrer"
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center p-8 text-center">
