@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button";
 import ConfigEditor from "@/components/ConfigEditor";
 import QueryInterface from "@/components/QueryInterface";
 import { toast } from "@/components/ui/use-toast";
-import { Download, FileText, ExternalLink } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import CsvDataFetcher from "@/components/CsvDataFetcher";
 import ConfigMappingRules from "@/components/ConfigMappingRules";
 import ChannelViewer from "@/components/ChannelViewer";
 import useConfigMapping from "@/hooks/useConfigMapping";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Link } from "react-router-dom";
+import Navigation from "@/components/Navigation";
 
 // Initial configuration template
 const initialConfig = {
@@ -103,11 +103,8 @@ const Index = () => {
           Create and manage your master configuration file through queries, CSV data, or direct edits
         </p>
         
-        <div className="mb-4 flex justify-center">
-          <Link to="/image-test" className="inline-flex items-center text-blue-600 hover:text-blue-800">
-            <ExternalLink className="h-4 w-4 mr-1" />
-            Open Image Test Page
-          </Link>
+        <div className="flex justify-center mb-4">
+          <Navigation />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">

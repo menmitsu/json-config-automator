@@ -1,10 +1,15 @@
 
 import React from "react";
 import CameraSnapshot from "@/components/CameraSnapshot";
+import Navigation from "@/components/Navigation";
 
 const CameraTest: React.FC = () => {
   return (
     <div className="container mx-auto p-4 max-w-4xl">
+      <div className="flex justify-center mb-6">
+        <Navigation />
+      </div>
+      
       <h1 className="text-3xl font-bold mb-6">Camera Snapshot Test</h1>
       <CameraSnapshot />
       
