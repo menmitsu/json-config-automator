@@ -1,14 +1,14 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Play, Video, Search, RefreshCw } from "lucide-react";
+import { Loader2, Play, Video, Search, RefreshCw, Image } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { fetchMultipleSheets } from "@/services/csvService";
+import { fetchRtspFrame } from "@/services/rtspService";
 
 interface ChannelViewerProps {
   currentConfig: any;
@@ -26,6 +26,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [searchResults, setSearchResults] = useState<Record<string, string>[]>([]);
   const [loginId, setLoginId] = useState("admin");
   const [password, setPassword] = useState("");
+  const [frameUrl, setFrameUrl] = useState<string | null>(null);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -184,8 +186,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     setSearchResults([]);
   };
 
-  // Function to view a channel
-  const viewChannel = (channelNumber: number) => {
+  // Function to view a channel and capture a frame
+  const viewChannel = async (channelNumber: number) => {
     if (!ipAddress) {
       toast({
         title: "IP Address Required",
@@ -197,17 +199,67 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
 
     setIsLoading(true);
     setActiveChannel(channelNumber);
+    setFrameUrl(null); // Clear previous frame
+    setIsCapturingFrame(true);
 
-    // In a real application, we would connect to the RTSP stream here
-    // For this demo, we'll simulate loading and then show a placeholder
-    setTimeout(() => {
-      setIsLoading(false);
+    const rtspUrl = generateRtspUrl(channelNumber);
+    
+    try {
+      // Try to capture a frame from the RTSP stream
+      const capturedFrame = await fetchRtspFrame(rtspUrl);
       
+      if (capturedFrame) {
+        setFrameUrl(capturedFrame);
+        toast({
+          title: "Frame Captured",
+          description: `Successfully captured frame from channel ${channelNumber}`
+        });
+      } else {
+        toast({
+          title: "Frame Capture Failed",
+          description: "Could not capture frame from the RTSP stream",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error viewing channel:", error);
       toast({
-        title: "Channel Connected",
-        description: `Connected to channel ${channelNumber}`
+        title: "Error",
+        description: "Failed to connect to the RTSP stream",
+        variant: "destructive"
       });
-    }, 1500);
+    } finally {
+      setIsLoading(false);
+      setIsCapturingFrame(false);
+    }
+  };
+
+  // Function to refresh the current frame
+  const refreshFrame = async () => {
+    if (activeChannel) {
+      setIsCapturingFrame(true);
+      try {
+        const rtspUrl = generateRtspUrl(activeChannel);
+        const capturedFrame = await fetchRtspFrame(rtspUrl);
+        
+        if (capturedFrame) {
+          setFrameUrl(capturedFrame);
+          toast({
+            title: "Frame Refreshed",
+            description: `Successfully refreshed frame from channel ${activeChannel}`
+          });
+        }
+      } catch (error) {
+        console.error("Error refreshing frame:", error);
+        toast({
+          title: "Error",
+          description: "Failed to refresh the frame",
+          variant: "destructive"
+        });
+      } finally {
+        setIsCapturingFrame(false);
+      }
+    }
   };
 
   return (
@@ -329,26 +381,58 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
         </CardHeader>
         <CardContent>
           <AspectRatio ratio={16/9} className="bg-muted relative overflow-hidden rounded-md">
-            {isLoading ? (
+            {isLoading || isCapturingFrame ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
+            ) : frameUrl && activeChannel ? (
+              <div className="absolute inset-0">
+                <img 
+                  src={frameUrl} 
+                  alt={`Frame from channel ${activeChannel}`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-4 right-4">
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    onClick={refreshFrame}
+                    className="opacity-80 hover:opacity-100"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Refresh
+                  </Button>
+                </div>
+              </div>
             ) : activeChannel ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
-                <Video className="h-16 w-16 mb-2" />
-                <p className="text-sm">RTSP Stream Placeholder</p>
+                <Image className="h-16 w-16 mb-2" />
+                <p className="text-sm">Failed to capture frame</p>
                 <p className="text-xs mt-1">Channel {activeChannel}</p>
-                <p className="text-xs mt-4 max-w-md text-center">
-                  Note: Browser cannot display RTSP streams directly. In a real application, 
-                  you would need a server-side component to convert RTSP to a web-compatible format.
-                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => viewChannel(activeChannel)}
+                  className="mt-4"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Try Again
+                </Button>
               </div>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                <p>Select a channel to view stream</p>
+                <p>Select a channel to view frame</p>
               </div>
             )}
           </AspectRatio>
+          <div className="text-xs mt-2 text-muted-foreground text-center">
+            {frameUrl && activeChannel && (
+              <p>Single frame captured from RTSP stream. Refresh to get the latest frame.</p>
+            )}
+            {!frameUrl && activeChannel && (
+              <p>Note: This demo simulates frame capture. In production, a server with FFmpeg would be required.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
