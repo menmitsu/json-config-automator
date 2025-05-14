@@ -114,7 +114,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     const { cleanIp, extractedPort } = formatIpAddress(ipAddress);
     const portToUse = extractedPort || port || "80";
     
-    // URL encode the username and password
+    // URL encode the username and password - ensure special characters are properly encoded
     const encodedLoginId = encodeURIComponent(loginId);
     const encodedPassword = encodeURIComponent(password);
     
@@ -272,11 +272,13 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const handleImageLoad = () => {
     setIsLoading(false);
     setImageError(null);
+    console.log("Image loaded successfully");
   };
 
   const handleImageError = () => {
     setIsLoading(false);
     setImageError(`Failed to load image from channel ${activeChannel}`);
+    console.error(`Failed to load image from channel ${activeChannel}`);
     toast({
       title: "Image Load Failed",
       description: "Could not load image from the camera",
@@ -459,6 +461,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
                     className="w-full h-full object-cover"
                     onLoad={handleImageLoad}
                     onError={handleImageError}
+                    referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
                   />
                 )}
                 
@@ -549,6 +553,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
                   onError={handleDirectImageError}
                   onLoad={() => console.log("Direct image test loaded successfully")}
                   referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center p-8 text-center">

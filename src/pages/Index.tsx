@@ -1,16 +1,16 @@
-
 import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ConfigEditor from "@/components/ConfigEditor";
 import QueryInterface from "@/components/QueryInterface";
-import { toast } from "@/hooks/use-toast";
-import { Download, FileText } from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
+import { Download, FileText, ExternalLink } from "lucide-react";
 import CsvDataFetcher from "@/components/CsvDataFetcher";
 import ConfigMappingRules from "@/components/ConfigMappingRules";
 import ChannelViewer from "@/components/ChannelViewer";
 import useConfigMapping from "@/hooks/useConfigMapping";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link } from "react-router-dom";
 
 // Initial configuration template
 const initialConfig = {
@@ -99,9 +99,16 @@ const Index = () => {
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl md:text-4xl font-bold mb-6 text-center">JSON Config Automator</h1>
-        <p className="text-gray-600 text-center mb-8">
+        <p className="text-gray-600 text-center mb-4">
           Create and manage your master configuration file through queries, CSV data, or direct edits
         </p>
+        
+        <div className="mb-4 flex justify-center">
+          <Link to="/image-test" className="inline-flex items-center text-blue-600 hover:text-blue-800">
+            <ExternalLink className="h-4 w-4 mr-1" />
+            Open Image Test Page
+          </Link>
+        </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
           <TabsList className="grid w-full grid-cols-4">
