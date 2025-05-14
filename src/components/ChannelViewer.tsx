@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [imageUrl, setImageUrl] = useState("");
   const [imageError, setImageError] = useState<string | null>(null);
   const [httpCommand, setHttpCommand] = useState("");
+  const [directImageUrl, setDirectImageUrl] = useState("http://admin:fp123456@122.176.135.50:8098/ISAPI/Streaming/channels/102/picture");
   
   // Google Sheets URLs
   const PRIMARY_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EANvZgBTpp5siZVsgNjtWDUPZbZFsQALmBHO2zET7lw/edit?gid=0#gid=0";
@@ -207,6 +209,9 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       setPassword("fp123456"); // Default fallback
     }
     
+    // Also update the direct image test URL
+    setDirectImageUrl(`http://${loginID || "admin"}:${pwd || "fp123456"}@${cleanIp}${extractedPort ? `:${extractedPort}` : ":80"}/ISAPI/Streaming/channels/102/picture`);
+    
     toast({
       title: "Center Selected",
       description: `IP Address set to ${cleanIp}${extractedPort ? `, Port: ${extractedPort}` : ""}${loginID ? `, Login ID: ${loginID}` : ""}${pwd ? `, Password: ${pwd}` : ""}`,
@@ -268,6 +273,17 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       title: "Image Load Failed",
       description: "Could not load image from the camera",
       variant: "destructive"
+    });
+  };
+
+  // Function to refresh the direct image test URL
+  const refreshDirectImageUrl = () => {
+    const timestamp = new Date().getTime();
+    setDirectImageUrl(`${directImageUrl.split('?')[0]}?t=${timestamp}`);
+    
+    toast({
+      title: "Test Image Refreshed",
+      description: "Direct image test URL updated with timestamp"
     });
   };
 
@@ -475,20 +491,45 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       
       {/* Debug Information - Direct Image Example */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Direct Image Test</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={refreshDirectImageUrl}
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Refresh Test Image
+          </Button>
         </CardHeader>
         <CardContent>
           <p className="mb-4 text-sm">This is a simple direct image tag for testing:</p>
           <div className="border p-4 rounded-md">
-            <img
-              src="http://admin:fp123456@122.176.135.50:8098/ISAPI/Streaming/channels/102/picture"
-              alt="Snapshot from camera 102"
-              className="max-w-full h-auto"
-            />
+            <div className="flex flex-col items-center">
+              <img
+                src={directImageUrl}
+                alt="Snapshot from camera 102"
+                className="max-w-full h-auto"
+                onError={(e) => {
+                  console.error("Direct image test loading failed");
+                  (e.target as HTMLImageElement).style.display = 'none';
+                  toast({
+                    title: "Test Image Failed",
+                    description: "Could not load test image. Check credentials and URL.",
+                    variant: "destructive"
+                  });
+                }}
+                onLoad={() => {
+                  console.log("Direct image test loaded successfully");
+                }}
+              />
+              <p className="text-center text-sm mt-2">
+                If the image isn't showing, try the "Refresh Test Image" button
+              </p>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Complete URL: http://admin:fp123456@122.176.135.50:8098/ISAPI/Streaming/channels/102/picture
+            Complete URL: {directImageUrl}
           </p>
         </CardContent>
       </Card>
