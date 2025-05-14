@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,6 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [password, setPassword] = useState("");
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [refreshTimer, setRefreshTimer] = useState<number | null>(null);
   
   const imageRef = useRef<HTMLImageElement>(null);
   
@@ -65,15 +65,6 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   useEffect(() => {
     fetchGoogleSheetData();
   }, []);
-
-  // Stop timer on unmount
-  useEffect(() => {
-    return () => {
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
-      }
-    };
-  }, [refreshTimer]);
 
   // Check if jQuery is loaded and initialize the jQuery code
   useEffect(() => {
@@ -256,22 +247,16 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       return;
     }
 
-    // Clear existing refresh timer if any
-    if (refreshTimer) {
-      clearInterval(refreshTimer);
-      setRefreshTimer(null);
-    }
-
     setIsLoading(true);
     setActiveChannel(channelNumber);
     setImageError(null);
     setIsImageLoaded(false);
 
-    // Generate initial image URL with timestamp
+    // Generate image URL with timestamp to prevent caching
     const baseUrl = generateImageUrl(channelNumber);
     const initialUrl = `${baseUrl}?t=${new Date().getTime()}`;
     
-    // Set up periodic refresh when jQuery is ready
+    // Set up image when jQuery is ready
     if (window.$ || window.jQuery) {
       const $ = window.$ || window.jQuery;
       
@@ -302,17 +287,6 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
             });
           }
         });
-        
-        // Set up refresh timer
-        const timer = window.setInterval(() => {
-          if (imageRef.current) {
-            const url = `${baseUrl}?t=${new Date().getTime()}`;
-            $(imageRef.current).attr('src', url);
-            console.log("Refreshing image...");
-          }
-        }, 5000); // Refresh every 5 seconds
-        
-        setRefreshTimer(timer);
       }
     } else {
       toast({
@@ -459,7 +433,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </CardTitle>
           {activeChannel && (
             <div className="text-xs text-muted-foreground">
-              Auto-refreshing every 5 seconds
+              Use manual refresh for new image
             </div>
           )}
         </CardHeader>
@@ -515,7 +489,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </AspectRatio>
           <div className="text-xs mt-2 text-muted-foreground text-center">
             {activeChannel && (
-              <p>Image refreshes automatically every 5 seconds. Click "Manual Refresh" for immediate update.</p>
+              <p>Click "Manual Refresh" button to update the image.</p>
             )}
           </div>
         </CardContent>
