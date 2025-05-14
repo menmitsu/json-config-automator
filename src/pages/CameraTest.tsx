@@ -16,9 +16,9 @@ const CameraTest: React.FC = () => {
       <div className="mt-8 p-4 bg-muted rounded-md">
         <h2 className="font-semibold mb-2">How this works</h2>
         <p className="text-sm">
-          This page uses a Supabase Edge Function to proxy requests to your camera system. 
-          The Edge Function makes the request with your credentials and returns the image data,
-          avoiding any CORS or mixed content issues that occur with client-side requests.
+          This page uses a local proxy to access your camera system. 
+          The proxy should be running at the URL specified in the form (default: http://localhost:8080/).
+          This approach avoids CORS and mixed content issues that occur with client-side requests.
         </p>
       </div>
     </div>

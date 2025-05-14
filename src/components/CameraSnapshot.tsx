@@ -15,6 +15,7 @@ const CameraSnapshot: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [imageData, setImageData] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [localProxyUrl, setLocalProxyUrl] = useState('http://localhost:8080/');
 
   const handleFetchImage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +87,20 @@ const CameraSnapshot: React.FC = () => {
             </div>
           </div>
           
+          <div className="space-y-2">
+            <Label htmlFor="localProxy">Local Proxy URL</Label>
+            <Input 
+              id="localProxy" 
+              value={localProxyUrl} 
+              onChange={(e) => setLocalProxyUrl(e.target.value)}
+              placeholder="http://localhost:8080/"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Local proxy address that will handle CORS and authentication
+            </p>
+          </div>
+          
           <Button type="submit" disabled={isLoading} className="w-full">
             {isLoading ? (
               <>
@@ -137,7 +152,7 @@ const CameraSnapshot: React.FC = () => {
       </CardContent>
       <CardFooter className="text-sm text-muted-foreground">
         <p>
-          Images are fetched securely through Supabase Edge Functions to avoid CORS issues.
+          Local proxy should be running to handle CORS and authentication issues.
         </p>
       </CardFooter>
     </Card>
