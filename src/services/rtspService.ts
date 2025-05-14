@@ -2,18 +2,18 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Service to handle RTSP stream captures using API2Convert service
+ * Service to handle HTTP image captures from NVR/camera systems
  * via Supabase Edge Function
  */
 
-// Function to fetch a single frame from an RTSP stream
-export const fetchRtspFrame = async (rtspUrl: string): Promise<string | null> => {
+// Function to fetch an image from an HTTP URL
+export const fetchRtspFrame = async (imageUrl: string): Promise<string | null> => {
   try {
-    console.log(`Requesting frame capture for RTSP URL: ${rtspUrl}`);
+    console.log(`Requesting image capture for URL: ${imageUrl}`);
     
     // Call the Supabase Edge Function
     const { data, error } = await supabase.functions.invoke("capture-rtsp-frame", {
-      body: { rtspUrl }
+      body: { rtspUrl: imageUrl } // Keeping parameter name for backward compatibility
     });
     
     if (error) {
@@ -35,10 +35,10 @@ export const fetchRtspFrame = async (rtspUrl: string): Promise<string | null> =>
       return null;
     }
     
-    console.log("Frame response received:", data.message || "Success");
+    console.log("Image response received:", data.message || "Success");
     return data.frameData;
   } catch (error) {
-    console.error("Error capturing RTSP frame:", error);
+    console.error("Error capturing image:", error);
     return null;
   }
 };

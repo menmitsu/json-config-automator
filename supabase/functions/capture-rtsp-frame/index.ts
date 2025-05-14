@@ -18,73 +18,67 @@ serve(async (req) => {
 
     if (!rtspUrl) {
       return new Response(
-        JSON.stringify({ error: "RTSP URL is required" }),
+        JSON.stringify({ error: "URL is required" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Processing RTSP URL: ${rtspUrl}`);
-    
-    // Use the API2Convert service to capture a frame from the RTSP stream
-    // This is a reliable service that can extract frames from various stream formats
-    const apiUrl = "https://api.api2convert.com/v2/streams/snapshot";
+    console.log(`Processing HTTP image URL: ${rtspUrl}`);
     
     try {
-      const response = await fetch(apiUrl, {
-        method: "POST",
+      // Directly fetch the image from the HTTP URL
+      const response = await fetch(rtspUrl, {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
-          "X-API-KEY": Deno.env.get("API2CONVERT_API_KEY") || "demo-key" // Replace with actual API key
-        },
-        body: JSON.stringify({
-          url: rtspUrl,
-          format: "jpeg",
-          quality: 80
-        })
+          "Accept": "image/jpeg, image/png, */*"
+        }
       });
       
-      // Check if the API request was successful
+      // Check if the request was successful
       if (!response.ok) {
-        const errorBody = await response.text();
-        console.error("Error response from API2Convert service:", errorBody);
+        const errorText = await response.text();
+        console.error(`Error response (${response.status}):`, errorText);
         
         return new Response(
           JSON.stringify({ 
-            error: "Failed to extract frame from RTSP stream",
-            details: `API responded with status ${response.status}`,
+            error: "Failed to fetch image from URL",
+            details: `Server responded with status ${response.status}`,
             suggestions: [
-              "Verify the RTSP URL is correct and accessible",
-              "Check if authentication credentials are required for the stream",
-              "Ensure the RTSP stream is currently active"
+              "Verify the URL is correct and accessible",
+              "Check if authentication credentials are required",
+              "Ensure the camera/NVR is online and responding"
             ]
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      // Get the frame data
-      const frameData = await response.arrayBuffer();
-      const base64Frame = btoa(String.fromCharCode(...new Uint8Array(frameData)));
+      // Get the image data
+      const imageData = await response.arrayBuffer();
+      const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageData)));
+      
+      // Determine content type from response or default to jpeg
+      const contentType = response.headers.get("content-type") || "image/jpeg";
       
       return new Response(
         JSON.stringify({ 
-          frameData: `data:image/jpeg;base64,${base64Frame}`,
-          message: "Frame successfully captured from RTSP stream"
+          frameData: `data:${contentType};base64,${base64Image}`,
+          message: "Image successfully captured"
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
       
     } catch (error) {
-      console.error("Error calling API2Convert service:", error);
+      console.error("Error fetching image:", error);
       
       return new Response(
         JSON.stringify({ 
-          error: "Failed to capture frame from RTSP stream",
+          error: "Failed to capture image",
           details: error.message,
           suggestions: [
-            "Check if the RTSP URL is accessible from the internet",
-            "Verify that the RTSP stream is currently active",
-            "Ensure the RTSP URL includes proper authentication if required"
+            "Check if the URL is accessible from the internet",
+            "Verify that the camera/NVR is currently online",
+            "Ensure the URL includes proper authentication if required"
           ]
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -79,21 +79,21 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     return formattedIp;
   };
 
-  // Escape special characters in password for RTSP URL
+  // Escape special characters in password for URL
   const escapePassword = (pass: string): string => {
     return pass.replace(/#/g, '%23');
   };
 
-  // Generate RTSP URL for a specific channel
-  const generateRtspUrl = (channelNumber: number): string => {
+  // Generate HTTP image URL for a specific channel
+  const generateImageUrl = (channelNumber: number): string => {
     const cleanIp = formatIpAddress(ipAddress);
     
     // If login credentials are available, include them in the URL
     if (loginId && password) {
       const escapedPassword = escapePassword(password);
-      return `rtsp://${loginId}:${escapedPassword}@${cleanIp}:${port}/Streaming/Channels/${channelNumber}`;
+      return `http://${loginId}:${escapedPassword}@${cleanIp}:${port}/ISAPI/Streaming/channels/${channelNumber}/picture`;
     } else {
-      return `rtsp://${cleanIp}:${port}/Streaming/Channels/${channelNumber}`;
+      return `http://${cleanIp}:${port}/ISAPI/Streaming/channels/${channelNumber}/picture`;
     }
   };
 
@@ -202,22 +202,22 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     setFrameUrl(null); // Clear previous frame
     setIsCapturingFrame(true);
 
-    const rtspUrl = generateRtspUrl(channelNumber);
+    const imageUrl = generateImageUrl(channelNumber);
     
     try {
-      // Try to capture a frame from the RTSP stream
-      const capturedFrame = await fetchRtspFrame(rtspUrl);
+      // Try to capture an image from the HTTP URL
+      const capturedFrame = await fetchRtspFrame(imageUrl);
       
       if (capturedFrame) {
         setFrameUrl(capturedFrame);
         toast({
-          title: "Frame Captured",
-          description: `Successfully captured frame from channel ${channelNumber}`
+          title: "Image Captured",
+          description: `Successfully captured image from channel ${channelNumber}`
         });
       } else {
         toast({
-          title: "Frame Capture Failed",
-          description: "Could not capture frame from the RTSP stream",
+          title: "Image Capture Failed",
+          description: "Could not capture image from the camera",
           variant: "destructive"
         });
       }
@@ -225,7 +225,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
       console.error("Error viewing channel:", error);
       toast({
         title: "Error",
-        description: "Failed to connect to the RTSP stream",
+        description: "Failed to connect to the camera",
         variant: "destructive"
       });
     } finally {
@@ -239,21 +239,21 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     if (activeChannel) {
       setIsCapturingFrame(true);
       try {
-        const rtspUrl = generateRtspUrl(activeChannel);
-        const capturedFrame = await fetchRtspFrame(rtspUrl);
+        const imageUrl = generateImageUrl(activeChannel);
+        const capturedFrame = await fetchRtspFrame(imageUrl);
         
         if (capturedFrame) {
           setFrameUrl(capturedFrame);
           toast({
-            title: "Frame Refreshed",
-            description: `Successfully refreshed frame from channel ${activeChannel}`
+            title: "Image Refreshed",
+            description: `Successfully refreshed image from channel ${activeChannel}`
           });
         }
       } catch (error) {
-        console.error("Error refreshing frame:", error);
+        console.error("Error refreshing image:", error);
         toast({
           title: "Error",
-          description: "Failed to refresh the frame",
+          description: "Failed to refresh the image",
           variant: "destructive"
         });
       } finally {
@@ -375,7 +375,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           </CardTitle>
           {activeChannel && (
             <div className="text-xs text-muted-foreground">
-              {generateRtspUrl(activeChannel)}
+              {generateImageUrl(activeChannel)}
             </div>
           )}
         </CardHeader>
