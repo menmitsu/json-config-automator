@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,7 +24,7 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
   const [isFetchingCsv, setIsFetchingCsv] = useState(false);
   const [searchResults, setSearchResults] = useState<Record<string, string>[]>([]);
   const [loginId, setLoginId] = useState("admin");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState("fp123456");
   const [imageUrl, setImageUrl] = useState("");
   const [imageError, setImageError] = useState<string | null>(null);
   
@@ -107,13 +106,13 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
     return { cleanIp: formattedIp, extractedPort };
   };
 
-  // Generate HTTP image URL for a specific channel
+  // Generate HTTP image URL for a specific channel with authentication
   const generateImageUrl = (channelNumber: number): string => {
     const { cleanIp, extractedPort } = formatIpAddress(ipAddress);
     const portToUse = extractedPort || port || "80";
     
-    // Create Base URL without authentication
-    let baseUrl = `http://${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
+    // Include authentication directly in the URL
+    let baseUrl = `http://${loginId}:${password}@${cleanIp}:${portToUse}/ISAPI/Streaming/channels/${channelNumber}/picture`;
     
     return baseUrl;
   };
@@ -459,8 +458,8 @@ const ChannelViewer: React.FC<ChannelViewerProps> = ({ currentConfig }) => {
           <p className="mb-4 text-sm">This is a simple direct image tag for testing:</p>
           <div className="border p-4 rounded-md">
             <img
-              src="http://116.74.4.62:8098/ISAPI/Streaming/channels/101/picture"
-              alt="Snapshot from camera 101"
+              src="http://admin:fp123456@122.176.135.50:8098/ISAPI/Streaming/channels/102/picture"
+              alt="Snapshot from camera 102"
               className="max-w-full h-auto"
             />
           </div>
