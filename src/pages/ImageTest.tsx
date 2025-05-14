@@ -5,17 +5,61 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { RefreshCw, AlertCircle, Info, ExternalLink } from "lucide-react";
+import { RefreshCw, AlertCircle, Info, ExternalLink, Check, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// List of CORS proxies to try - many options with focus on Indian region
+const CORS_PROXIES = [
+  { id: "corsproxy", url: "https://corsproxy.io/?", name: "CORS Proxy IO" },
+  { id: "corsanywhere", url: "https://cors-anywhere.herokuapp.com/", name: "CORS Anywhere" },
+  { id: "allorigins", url: "https://api.allorigins.win/raw?url=", name: "All Origins" },
+  { id: "proxyfyio", url: "https://api.proxyfy.io/v1/proxy?url=", name: "Proxyfy IO" },
+  { id: "jsonp", url: "https://jsonp.afeld.me/?url=", name: "JSONP ME" },
+  { id: "thingproxy", url: "https://thingproxy.freeboard.io/fetch/", name: "ThingProxy" },
+  { id: "apiproxyfree", url: "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http", name: "API Proxy Free" },
+  { id: "yesno", url: "https://api.yesno.wtf/proxy/", name: "YesNo Proxy" },
+  { id: "bypass", url: "https://api.bypass.vip/?url=", name: "Bypass VIP" },
+  { id: "whatcors", url: "https://whatcors.vercel.app/api?url=", name: "WhatCORS" },
+  { id: "akshit", url: "https://proxy.akshit.cc/?url=", name: "Akshit Proxy" },
+  { id: "codeblock", url: "https://cors.codeblock.cz/?url=", name: "Codeblock CZ" },
+  { id: "nsfw", url: "https://api.nsfw.xxx/proxy?url=", name: "NSFW Proxy" },
+  { id: "hackerearth", url: "https://cors.hackerearth.com/", name: "HackerEarth (India)" },
+  { id: "onrender", url: "https://cors-proxy-server-two.onrender.com/api?url=", name: "OnRender" },
+  { id: "nextjs", url: "https://nextjs-cors-proxy.vercel.app/api?url=", name: "NextJS Proxy" },
+  { id: "allorsignin", url: "https://api.allorigins.win/get?url=", name: "All Origins Get" },
+  { id: "proxylist", url: "https://www.proxylist.geonode.com/api/proxy-list?limit=10&page=1&sort_by=lastChecked&sort_type=desc&country=IN", name: "GeoNode India" },
+  { id: "proxylistapp", url: "https://proxy-list.app/api/proxy?lastChecked=300&country=IN", name: "Proxy List App (India)" },
+  { id: "cloudflare", url: "https://cloudflare-cors-anywhere.andy-3.workers.dev/?", name: "Cloudflare Workers" },
+  { id: "cors-anywhere-worker", url: "https://cors-anywhere-worker.warengonzaga.workers.dev/?", name: "CORS Worker" },
+  { id: "rapidapi", url: "https://cors-proxy1.p.rapidapi.com/", name: "RapidAPI CORS" },
+  { id: "httpbin", url: "https://httpbin.org/get?url=", name: "HTTPBin" },
+  { id: "roamingproxy", url: "https://api.roamingproxy.com/v1/fetch?url=", name: "Roaming Proxy" },
+  { id: "cors-proxy-ede", url: "https://cors-proxy-ede.herokuapp.com/", name: "CORS Proxy EDE" },
+  { id: "zips", url: "https://zips.fly.dev/", name: "Zips Proxy" },
+  { id: "kuma", url: "https://kuma-cors-anywhere.herokuapp.com/", name: "Kuma CORS" },
+  { id: "prism", url: "https://prism-proxy.app/", name: "Prism Proxy" },
+  { id: "allorigins-raw", url: "https://api.allorigins.win/raw?url=", name: "All Origins Raw" },
+  { id: "corsproxy-org", url: "https://corsproxy.org/?", name: "CORSProxy Org" },
+  { id: "fastapi", url: "https://fastapi-proxy.onrender.com/get?url=", name: "FastAPI Proxy" },
+  { id: "localproxy", url: "http://localhost:8080/", name: "Local Proxy (Dev)" },
+  { id: "directproxy", url: "", name: "Direct (No Proxy)" },
+];
 
 const ImageTest = () => {
   const [imageUrl, setImageUrl] = useState("http://admin:fp%23bl170522@144.48.76.142:8098/ISAPI/Streaming/channels/102/picture");
   const [showImage, setShowImage] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("direct");
-  const [corsProxyUrl, setCorsProxyUrl] = useState("https://corsproxy.io/?");
+  const [selectedProxy, setSelectedProxy] = useState(CORS_PROXIES[0].id);
+  const [customProxyUrl, setCustomProxyUrl] = useState("");
+  const [useCustomProxy, setUseCustomProxy] = useState(false);
   const [mixedContentDetected, setMixedContentDetected] = useState(false);
   const [protocol, setProtocol] = useState("");
+  const [successfulProxies, setSuccessfulProxies] = useState<string[]>([]);
+  const [failedProxies, setFailedProxies] = useState<string[]>([]);
+  const [isAutotesting, setIsAutotesting] = useState(false);
+  const [currentTestingIndex, setCurrentTestingIndex] = useState(0);
 
   // Check the current protocol
   useEffect(() => {
@@ -54,11 +98,86 @@ const ImageTest = () => {
     setImageUrl(`${baseUrl}${cacheBuster}`);
   };
 
-  // Generate the proxied URL for CORS/Mixed Content issues
+  // Generate the proxied URL based on selection
   const getProxiedUrl = () => {
-    // Remove existing protocol
+    // Find the selected proxy
+    const proxy = useCustomProxy 
+      ? { url: customProxyUrl } 
+      : CORS_PROXIES.find(p => p.id === selectedProxy) || CORS_PROXIES[0];
+    
+    // If it's the direct option, just return the image URL
+    if (proxy.id === "directproxy") {
+      return imageUrl;
+    }
+    
+    // Remove existing protocol for consistent handling
     const urlWithoutProtocol = imageUrl.replace(/^https?:\/\//, '');
-    return `${corsProxyUrl}http://${urlWithoutProtocol}`;
+    return `${proxy.url}http://${urlWithoutProtocol}`;
+  };
+
+  // Handle proxy selection change
+  const handleProxyChange = (value: string) => {
+    setSelectedProxy(value);
+    // Reset custom proxy setting when a preset is selected
+    if (value !== "custom") {
+      setUseCustomProxy(false);
+    }
+  };
+
+  // Handle proxy success during autotest
+  const handleProxySuccess = (proxyId: string) => {
+    if (!successfulProxies.includes(proxyId)) {
+      setSuccessfulProxies(prev => [...prev, proxyId]);
+    }
+    
+    // If we're autotesting, continue with next proxy
+    if (isAutotesting) {
+      moveToNextProxy();
+    }
+  };
+
+  // Handle proxy failure during autotest
+  const handleProxyFailure = (proxyId: string) => {
+    if (!failedProxies.includes(proxyId)) {
+      setFailedProxies(prev => [...prev, proxyId]);
+    }
+    
+    // If we're autotesting, continue with next proxy
+    if (isAutotesting) {
+      moveToNextProxy();
+    }
+  };
+
+  // Start auto testing all proxies
+  const startAutotesting = () => {
+    setIsAutotesting(true);
+    setCurrentTestingIndex(0);
+    setSuccessfulProxies([]);
+    setFailedProxies([]);
+    setActiveTab("proxy");
+    setSelectedProxy(CORS_PROXIES[0].id);
+  };
+
+  // Move to the next proxy in the autotest sequence
+  const moveToNextProxy = () => {
+    const nextIndex = currentTestingIndex + 1;
+    
+    if (nextIndex < CORS_PROXIES.length) {
+      setCurrentTestingIndex(nextIndex);
+      setSelectedProxy(CORS_PROXIES[nextIndex].id);
+    } else {
+      // We've tested all proxies
+      setIsAutotesting(false);
+      toast({
+        title: "Testing Complete",
+        description: `Found ${successfulProxies.length} working proxies out of ${CORS_PROXIES.length}`,
+      });
+    }
+  };
+
+  // Stop autotesting
+  const stopAutotesting = () => {
+    setIsAutotesting(false);
   };
 
   return (
@@ -96,18 +215,87 @@ const ImageTest = () => {
             </div>
             
             {activeTab === "proxy" && (
-              <div>
-                <Label htmlFor="corsProxy">CORS Proxy URL</Label>
-                <Input 
-                  id="corsProxy" 
-                  value={corsProxyUrl}
-                  onChange={(e) => setCorsProxyUrl(e.target.value)}
-                  className="font-mono text-sm"
-                  placeholder="https://corsproxy.io/?"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Enter a CORS proxy URL that can bypass mixed content restrictions
-                </p>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="proxySelect">Select CORS Proxy</Label>
+                  <Select 
+                    value={selectedProxy} 
+                    onValueChange={handleProxyChange}
+                  >
+                    <SelectTrigger id="proxySelect">
+                      <SelectValue placeholder="Select a proxy" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CORS_PROXIES.map(proxy => (
+                        <SelectItem 
+                          key={proxy.id} 
+                          value={proxy.id}
+                          className={
+                            successfulProxies.includes(proxy.id) 
+                              ? "text-green-600" 
+                              : failedProxies.includes(proxy.id) 
+                                ? "text-red-600" 
+                                : ""
+                          }
+                        >
+                          {proxy.name}
+                          {successfulProxies.includes(proxy.id) && <Check className="h-4 w-4 ml-1 inline text-green-600" />}
+                          {failedProxies.includes(proxy.id) && <X className="h-4 w-4 ml-1 inline text-red-600" />}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="custom">Custom Proxy URL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {selectedProxy === "custom" && (
+                  <div>
+                    <Label htmlFor="customProxy">Custom CORS Proxy URL</Label>
+                    <Input 
+                      id="customProxy" 
+                      value={customProxyUrl}
+                      onChange={(e) => setCustomProxyUrl(e.target.value)}
+                      className="font-mono text-sm"
+                      placeholder="https://your-proxy-url.com/?"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Enter your custom proxy URL including trailing characters (like ? or /)
+                    </p>
+                  </div>
+                )}
+                
+                <div className="flex space-x-2">
+                  <Button
+                    variant="secondary"
+                    onClick={startAutotesting}
+                    disabled={isAutotesting}
+                  >
+                    {isAutotesting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Testing ({currentTestingIndex + 1}/{CORS_PROXIES.length})
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Auto-Test All Proxies
+                      </>
+                    )}
+                  </Button>
+                  
+                  {isAutotesting && (
+                    <Button variant="destructive" onClick={stopAutotesting}>
+                      Stop Testing
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="text-sm">
+                  <p className="font-medium">Testing status:</p>
+                  <p className="text-green-600">Working proxies: {successfulProxies.length}</p>
+                  <p className="text-red-600">Failed proxies: {failedProxies.length}</p>
+                  <p className="text-gray-600">Remaining: {CORS_PROXIES.length - successfulProxies.length - failedProxies.length}</p>
+                </div>
               </div>
             )}
             
@@ -176,24 +364,43 @@ const ImageTest = () => {
             <CardContent>
               <div className="border p-4 rounded-md">
                 <div className="flex justify-center">
+                  {isAutotesting && currentTestingIndex > 0 && (
+                    <div className="text-center p-4">
+                      <p className="mb-2">Auto-testing proxies ({currentTestingIndex + 1}/{CORS_PROXIES.length})</p>
+                      <p className="text-sm">Currently testing: {CORS_PROXIES[currentTestingIndex]?.name}</p>
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto my-4" />
+                    </div>
+                  )}
                   <img
                     src={getProxiedUrl()}
                     alt="Proxied test image"
                     className="max-w-full h-auto border"
                     onError={() => {
                       console.error("Proxied image failed to load");
-                      toast({
-                        title: "Proxy Image Failed",
-                        description: "Could not load the image through the proxy",
-                        variant: "destructive",
-                      });
+                      
+                      // Record failure in autotesting
+                      if (isAutotesting) {
+                        handleProxyFailure(selectedProxy);
+                      } else {
+                        toast({
+                          title: "Proxy Image Failed",
+                          description: "Could not load the image through the proxy",
+                          variant: "destructive",
+                        });
+                      }
                     }}
                     onLoad={() => {
                       console.log("Proxied image loaded successfully");
-                      toast({
-                        title: "Proxy Success",
-                        description: "Image loaded successfully through proxy",
-                      });
+                      
+                      // Record success in autotesting
+                      if (isAutotesting) {
+                        handleProxySuccess(selectedProxy);
+                      } else {
+                        toast({
+                          title: "Proxy Success",
+                          description: "Image loaded successfully through proxy",
+                        });
+                      }
                     }}
                     referrerPolicy="no-referrer"
                     crossOrigin="anonymous"
@@ -208,6 +415,29 @@ const ImageTest = () => {
                     {getProxiedUrl()}
                   </p>
                 </div>
+                
+                {successfulProxies.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="font-medium text-green-600">Working Proxies:</h3>
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                      {successfulProxies.map(proxyId => {
+                        const proxy = CORS_PROXIES.find(p => p.id === proxyId);
+                        return (
+                          <li key={proxyId} className="text-sm">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-green-600 p-0 h-auto"
+                              onClick={() => setSelectedProxy(proxyId)}
+                            >
+                              {proxy?.name || proxyId}
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
